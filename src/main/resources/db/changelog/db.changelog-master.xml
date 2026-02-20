@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <include file="db/changelog/migrations/001_create_users_table.xml"/>
+    <include file="db/changelog/migrations/002_create_user_advisors_table.xml"/>
+    <include file="/db/changelog/migrations/003_create_funds_table.xml"/>
+    <include file="db/changelog/migrations/004_add_managed_fund_to_users.xml"/>
+    <include file="db/changelog/migrations/005_create_investments_table.xml"/>
+    <include file="db/changelog/migrations/006_create_transactions_table.xml"/>
+    <include file="db/changelog/migrations/007_create_reports_table.xml"/>
+    <include file="db/changelog/migrations/008_funds_history_table.xml"/>
+    <include file="db/changelog/migrations/009_fund_price_trigger.xml"/>
+    <include file="db/changelog/migrations/010_create_stock_table.xml"/>
+    <include file="db/changelog/migrations/011_create_fund_stock_holdings_table.xml"/>
+    <include file="db/changelog/migrations/012_create_stock_trade_history_table.xml"/>
+    <include file="db/changelog/migrations/013_create_commodities_table.xml"/>
+    <include file="db/changelog/migrations/014_create_fund_commodity_holdings_table.xml"/>
+    <include file="db/changelog/migrations/015_create_commodity_trade_history_table.xml"/>
+    <include file="db/changelog/migrations/016_add_fund_metadata.xml"/>
+
+</databaseChangeLog>

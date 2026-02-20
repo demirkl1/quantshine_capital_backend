@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Fon listesi ve detay sayfasında gösterilecek meta veriler.
+        Mevcut funds tablosuna eklenir; null'a izin verilir → geriye uyumluluk korunur.
+    -->
+    <changeSet id="016-add-fund-metadata" author="quantshine">
+
+        <addColumn tableName="funds">
+
+            <!-- Fon türü: "Değişken Fon", "Fon Sepeti Fonu", "Borçlanma Araçları Fonu" vb. -->
+            <column name="fund_type" type="VARCHAR(100)" defaultValue="Değişken Fon">
+                <constraints nullable="true"/>
+            </column>
+
+            <!-- Para birimi kodu: TRY, USD vb. -->
+            <column name="currency" type="VARCHAR(10)" defaultValue="TRY">
+                <constraints nullable="true"/>
+            </column>
+
+            <!-- TEFAS'ta işlem görüp görmediği -->
+            <column name="tefas" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="true"/>
+            </column>
+
+            <!-- Fon risk derecesi 1-7 (KIID uyumlu) -->
+            <column name="risk_level" type="INTEGER" defaultValueNumeric="4">
+                <constraints nullable="true"/>
+            </column>
+
+            <!-- Fonun kuruluş / başlangıç tarihi -->
+            <column name="inception_date" type="DATE">
+                <constraints nullable="true"/>
+            </column>
+
+        </addColumn>
+
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="014" author="quantshine">
+        <createTable tableName="fund_commodity_holdings">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="fund_code" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="commodity_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="lot_count" type="DECIMAL(15,4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="avg_cost_usd" type="DECIMAL(15,4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_cost_try" type="DECIMAL(15,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="purchase_date" type="TIMESTAMP">
+                <constraints nullable="true"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="fund_commodity_holdings"
+                baseColumnNames="commodity_id"
+                constraintName="fk_fch_commodity"
+                referencedTableName="commodities"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <createIndex indexName="idx_fch_fund_code" tableName="fund_commodity_holdings">
+            <column name="fund_code"/>
+        </createIndex>
+
+        <createIndex indexName="idx_fch_commodity_id" tableName="fund_commodity_holdings">
+            <column name="commodity_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="fund_commodity_holdings"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

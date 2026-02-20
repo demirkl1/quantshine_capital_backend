@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="010" author="quantshine">
+        <createTable tableName="stocks">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="stock_code" type="VARCHAR(10)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="stock_name" type="VARCHAR(100)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="current_price" type="DECIMAL(10,4)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="previous_close" type="DECIMAL(10,4)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="price_change" type="DECIMAL(10,4)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="change_percent" type="VARCHAR(20)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="last_update" type="TIMESTAMP">
+                <constraints nullable="true"/>
+            </column>
+        </createTable>
+
+        <!-- Index ekleme -->
+        <createIndex indexName="idx_stock_code" tableName="stocks">
+            <column name="stock_code"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="stocks"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

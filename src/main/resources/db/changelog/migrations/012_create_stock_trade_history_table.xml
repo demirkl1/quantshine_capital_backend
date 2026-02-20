@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="012" author="quantshine">
+        <createTable tableName="stock_trade_history">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="fund_code" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stock_code" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stock_name" type="VARCHAR(255)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="type" type="VARCHAR(4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="lot" type="DECIMAL(15,4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="price" type="DECIMAL(15,4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_amount" type="DECIMAL(15,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="trade_date" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex indexName="idx_sth_fund_code" tableName="stock_trade_history">
+            <column name="fund_code"/>
+        </createIndex>
+
+        <createIndex indexName="idx_sth_trade_date" tableName="stock_trade_history">
+            <column name="trade_date"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="stock_trade_history"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
