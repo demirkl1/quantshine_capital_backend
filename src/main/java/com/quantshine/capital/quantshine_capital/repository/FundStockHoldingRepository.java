@@ -15,4 +15,6 @@ public interface FundStockHoldingRepository extends JpaRepository<FundStockHoldi
     // Belirli bir fonun içindeki belirli bir hisseyi bulur
     // stock_id üzerinden ilişki kurduğumuz için stock.stockCode üzerinden arama yapar
     Optional<FundStockHolding> findByFundCodeAndStock_StockCode(String fundCode, String stockCode);
+
+    void deleteByFundCode(String fundCode);
 }

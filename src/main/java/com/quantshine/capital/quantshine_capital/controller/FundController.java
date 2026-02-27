@@ -233,6 +233,26 @@ public class FundController {
     }
 
     /**
+     * Fonu siler.
+     * Ön koşul: fonda atanmış danışman ve aktif yatırımcı (lot > 0) olmamalıdır.
+     * İşlem/fiyat geçmişi silinmez.
+     * DELETE /api/funds/{fundCode}
+     */
+    @DeleteMapping("/{fundCode}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> deleteFund(@PathVariable String fundCode) {
+        if (!isValidCode(fundCode)) {
+            return ResponseEntity.badRequest().body("Geçersiz fon kodu.");
+        }
+        try {
+            fundService.deleteFund(fundCode.toUpperCase());
+            return ResponseEntity.ok("Fon başarıyla silindi.");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    /**
      * Portföy değerine göre fon birim fiyatını günceller.
      * POST /api/funds/{fundCode}/update-price
      */

@@ -13,4 +13,6 @@ public interface FundCommodityHoldingRepository extends JpaRepository<FundCommod
     List<FundCommodityHolding> findByFundCode(String fundCode);
 
     Optional<FundCommodityHolding> findByFundCodeAndCommodity_Symbol(String fundCode, String symbol);
+
+    void deleteByFundCode(String fundCode);
 }

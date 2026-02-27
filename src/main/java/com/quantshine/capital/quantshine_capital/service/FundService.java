@@ -33,6 +33,7 @@ public class FundService {
     private final FundStockHoldingRepository      fundStockHoldingRepository;
     private final FundCommodityHoldingRepository  fundCommodityHoldingRepository;
     private final InvestmentRepository            investmentRepository;
+    private final UserRepository                  userRepository;
 
     // ════════════════════════════════════════════════════════════
     //  Fiyat güncelleme (mevcut işlevler korundu)
@@ -106,6 +107,48 @@ public class FundService {
             }
         }
         log.info("Tüm fon fiyatları güncellendi.");
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  Fon silme
+    // ════════════════════════════════════════════════════════════
+
+    /**
+     * Fonu siler.
+     * Ön koşullar:
+     *   1. Fona atanmış aktif danışman olmamalı.
+     *   2. Fonda lot > 0 olan aktif yatırımcı olmamalı.
+     * İşlem geçmişi, fiyat geçmişi ve sıfır-lotlu investment kayıtları
+     * tarihsel raporlama için korunur.
+     */
+    @Transactional
+    public void deleteFund(String fundCode) {
+        Fund fund = fundRepository.findByFundCode(fundCode)
+                .orElseThrow(() -> new RuntimeException("'" + fundCode + "' kodlu fon bulunamadı."));
+
+        // 1. Atanmış danışman kontrolü
+        if (userRepository.existsByManagedFundCode(fundCode)) {
+            throw new RuntimeException(
+                "Fona atanmış danışman var. Önce danışmanları başka bir fona aktarın.");
+        }
+
+        // 2. Aktif yatırımcı kontrolü (lotCount > 0)
+        boolean hasActiveInvestors = investmentRepository.findByFundCode(fundCode)
+                .stream()
+                .anyMatch(i -> i.getLotCount() != null
+                        && i.getLotCount().compareTo(BigDecimal.ZERO) > 0);
+        if (hasActiveInvestors) {
+            throw new RuntimeException(
+                "Fonda aktif yatırımcı var. Önce tüm yatırımcı bakiyelerini sıfırlayın.");
+        }
+
+        // 3. Aktif pozisyonları temizle (hisse & emtia)
+        fundStockHoldingRepository.deleteByFundCode(fundCode);
+        fundCommodityHoldingRepository.deleteByFundCode(fundCode);
+
+        // 4. Fonu sil (işlem geçmişi, fiyat geçmişi ve investment kayıtları korunur)
+        fundRepository.delete(fund);
+        log.info("Fon silindi: {}", fundCode);
     }
 
     // ════════════════════════════════════════════════════════════

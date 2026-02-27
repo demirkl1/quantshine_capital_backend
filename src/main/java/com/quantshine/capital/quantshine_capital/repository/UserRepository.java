@@ -28,4 +28,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u FROM User u WHERE u.role = :role AND u.isApproved = true")
     List<User> findAdvisorsWithInvestors(@Param("role") Role role);
+
+    boolean existsByManagedFundCode(String managedFundCode);
 }
