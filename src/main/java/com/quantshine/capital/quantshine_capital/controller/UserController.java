@@ -38,6 +38,20 @@ public class UserController {
         user.setEmail(jwt.getClaimAsString("email"));
         user.setFirstName(jwt.getClaimAsString("given_name"));
         user.setLastName(jwt.getClaimAsString("family_name"));
+
+        // JWT realm_access.roles → DB'de yeni kullanıcı açılacaksa doğru rol atansın
+        try {
+            Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+            if (realmAccess != null) {
+                List<?> roles = (List<?>) realmAccess.get("roles");
+                if (roles != null) {
+                    if (roles.contains("ADMIN"))         user.setRole(Role.ADMIN);
+                    else if (roles.contains("ADVISOR"))  user.setRole(Role.ADVISOR);
+                    else                                 user.setRole(Role.INVESTOR);
+                }
+            }
+        } catch (Exception ignored) { /* rol okunamazsa syncUserWithIdp varsayılanı kullanır */ }
+
         return userService.syncUserWithIdp(user);
     }
 

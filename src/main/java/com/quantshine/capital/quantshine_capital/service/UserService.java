@@ -134,6 +134,11 @@ public class UserService {
                     if (userFromIdp.getRole() == null) {
                         userFromIdp.setRole(Role.INVESTOR);
                     }
+                    // tcNo NOT NULL constraint — IDP kullanıcıları için benzersiz placeholder üret
+                    if (userFromIdp.getTcNo() == null) {
+                        String kc = userFromIdp.getKeycloakId().replace("-", "");
+                        userFromIdp.setTcNo(kc.substring(0, Math.min(11, kc.length())));
+                    }
                     userFromIdp.setApproved(true);
                     userFromIdp.setPassword(null);
                     return userRepository.save(userFromIdp);
