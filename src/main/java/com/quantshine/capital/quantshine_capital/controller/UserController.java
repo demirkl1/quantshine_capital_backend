@@ -139,6 +139,25 @@ public class UserController {
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    @PutMapping("/unassign-fund")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> unassignAdvisorFund(@RequestParam String advisorTc) {
+        return userRepository.findByTcNo(advisorTc)
+                .map(user -> {
+                    if (user.getRole() != Role.ADVISOR) {
+                        return ResponseEntity.badRequest().body("Sadece danışmanlar için bu işlem yapılabilir.");
+                    }
+                    String previousFund = user.getManagedFundCode();
+                    if (previousFund == null || previousFund.isBlank()) {
+                        return ResponseEntity.badRequest().body("Danışman zaten herhangi bir fona atanmamış.");
+                    }
+                    user.setManagedFundCode(null);
+                    userRepository.save(user);
+                    return ResponseEntity.ok("Danışman " + previousFund + " fonundan çıkarıldı.");
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
     @GetMapping("/my-advisors-profiles")
     @PreAuthorize("hasRole('INVESTOR')")
     public ResponseEntity<List<AdvisorProfileDTO>> getMyAdvisorsProfiles(@AuthenticationPrincipal Jwt jwt) {
