@@ -7,6 +7,7 @@ import com.quantshine.capital.quantshine_capital.service.UserService;
 import com.quantshine.capital.quantshine_capital.service.InvestmentService;
 import com.quantshine.capital.quantshine_capital.service.TradeService;
 import com.quantshine.capital.quantshine_capital.repository.UserRepository;
+import com.quantshine.capital.quantshine_capital.repository.InvestmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,6 +29,7 @@ public class UserController {
     private final TradeService tradeService;
     private final InvestmentService investmentService;
     private final UserRepository userRepository;
+    private final InvestmentRepository investmentRepository;
 
     // --- PROFIL VE ONAY ISLEMLERI ---
 
@@ -138,6 +140,25 @@ public class UserController {
                     return ResponseEntity.ok("Danışman " + fundCode + " fonuna transfer edildi.");
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/remove-from-fund")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> removeInvestorFromFund(
+            @RequestParam String investorTc,
+            @RequestParam String fundCode) {
+        try {
+            User investor = userRepository.findByTcNo(investorTc)
+                    .orElseThrow(() -> new RuntimeException("Yatırımcı bulunamadı"));
+            investmentRepository.findByInvestorIdAndFundCode(investor.getId(), fundCode.toUpperCase())
+                    .ifPresentOrElse(
+                            investmentRepository::delete,
+                            () -> { throw new RuntimeException("Bu yatırımcının bu fonda kaydı bulunamadı"); }
+                    );
+            return ResponseEntity.ok("Yatırımcı " + fundCode.toUpperCase() + " fonundan çıkarıldı.");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Hata: " + e.getMessage());
+        }
     }
 
     @PutMapping("/unassign-fund")
