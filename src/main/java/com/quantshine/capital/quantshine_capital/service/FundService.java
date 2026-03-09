@@ -71,6 +71,14 @@ public class FundService {
 
         BigDecimal totalValue = calcTotalPortfolioValue(fund);
 
+        // Fon henüz nakit veya varlık içermiyorsa (yeni oluşturulmuş, boş fon)
+        // mevcut birim fiyatı sıfırlamak yerine koru
+        if (totalValue.compareTo(BigDecimal.ZERO) == 0) {
+            log.info("{} fonu için toplam portföy değeri sıfır — mevcut birim fiyat korunuyor: {}",
+                    fundCode, fund.getCurrentPrice());
+            return;
+        }
+
         BigDecimal totalInvestorLots = investmentRepository.findByFundCode(fundCode.toUpperCase())
                 .stream()
                 .map(Investment::getLotCount)
