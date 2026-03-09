@@ -3,6 +3,7 @@ package com.quantshine.capital.quantshine_capital.service;
 import com.quantshine.capital.quantshine_capital.entity.User;
 import com.quantshine.capital.quantshine_capital.entity.Role;
 import com.quantshine.capital.quantshine_capital.repository.UserRepository;
+import com.quantshine.capital.quantshine_capital.repository.InvestmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.keycloak.admin.client.CreatedResponseUtil;
 import org.keycloak.admin.client.Keycloak;
@@ -29,6 +30,7 @@ public class UserService {
     private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     private final UserRepository userRepository;
+    private final InvestmentRepository investmentRepository;
     private final Keycloak keycloak;
     private final EncryptionService encryptionService;
 
@@ -174,6 +176,37 @@ public class UserService {
 
     public List<User> getAdvisorsAndAdmins() {
         return userRepository.findAllByRoleIn(List.of(Role.ADMIN, Role.ADVISOR));
+    }
+
+    /**
+     * Yatırımcıyı DB'den ve Keycloak'tan kalıcı olarak siler.
+     * Yatırım kayıtları da temizlenir; işlem geçmişi korunur.
+     */
+    @Transactional
+    public void deleteInvestorByTcNo(String tcNo) {
+        User user = userRepository.findByTcNo(tcNo)
+                .orElseThrow(() -> new RuntimeException("TC No ile kullanıcı bulunamadı: " + tcNo));
+
+        if (user.getRole() != Role.INVESTOR) {
+            throw new RuntimeException("Yalnızca yatırımcı hesapları bu yolla silinemez.");
+        }
+
+        // 1. Fon yatırım kayıtlarını sil
+        investmentRepository.deleteByInvestorId(user.getId());
+
+        // 2. Keycloak hesabını sil (varsa)
+        if (user.getKeycloakId() != null) {
+            try {
+                keycloak.realm(realmName).users().delete(user.getKeycloakId());
+                log.info("Keycloak hesabı silindi: {}", user.getKeycloakId());
+            } catch (Exception e) {
+                log.warn("Keycloak hesabı silinemedi (devam ediliyor): {}", e.getMessage());
+            }
+        }
+
+        // 3. DB'den sil
+        userRepository.delete(user);
+        log.info("Yatırımcı silindi: {} ({})", user.getEmail(), tcNo);
     }
 
 }

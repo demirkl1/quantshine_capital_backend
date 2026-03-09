@@ -199,6 +199,17 @@ public class UserController {
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
+    @DeleteMapping("/{tcNo}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> deleteInvestor(@PathVariable String tcNo) {
+        try {
+            userService.deleteInvestorByTcNo(tcNo);
+            return ResponseEntity.ok("Yatırımcı başarıyla silindi.");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Silme hatası: " + e.getMessage());
+        }
+    }
+
     @PutMapping("/update-description")
     @PreAuthorize("hasAnyRole('ADVISOR', 'ADMIN')")
     public ResponseEntity<?> updateDescription(
