@@ -34,7 +34,18 @@ public class MarketDataController {
     public Map<String, Double> getMarketHistory(
             @PathVariable String symbol,
             @RequestParam(defaultValue = "30") int days) {
-        // İş mantığını Service'e devrettik
         return marketDataService.getMarketHistory(symbol, days);
+    }
+
+    /**
+     * Bireysel BIST hissesinin fiyat geçmişi.
+     * Yahoo Finance'da BIST hisseleri STOCKCODE.IS formatındadır.
+     * GET /api/market/stock-history/THYAO?days=30
+     */
+    @GetMapping("/stock-history/{stockCode}")
+    public Map<String, Double> getStockHistory(
+            @PathVariable String stockCode,
+            @RequestParam(defaultValue = "30") int days) {
+        return marketDataService.getStockHistory(stockCode, days);
     }
 }

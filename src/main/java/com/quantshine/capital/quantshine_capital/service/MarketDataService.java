@@ -11,6 +11,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
@@ -144,6 +145,59 @@ public class MarketDataService {
         } catch (Exception e) {
             log.error("Grafik geçmişi hatası [{}]: {}", symbol, e.getMessage());
             return fallback(symbol, days);
+        }
+    }
+
+    /* ─── Bireysel BIST hissesi geçmişi — Stooq.com CSV API ──── */
+    public Map<String, Double> getStockHistory(String stockCode, int days) {
+        LocalDate toDate   = LocalDate.now();
+        LocalDate fromDate = toDate.minusDays(days + 5); // hafta sonu/tatil payı
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+        // Stooq: AKBNK.TR formatı, CSV döner — API key gerekmez
+        String url = String.format(
+            "https://stooq.com/q/d/l/?s=%s.tr&d1=%s&d2=%s&i=d",
+            stockCode.toLowerCase(), fromDate.format(fmt), toDate.format(fmt)
+        );
+
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                + "AppleWebKit/537.36 (KHTML, like Gecko) "
+                + "Chrome/122.0.0.0 Safari/537.36");
+            headers.set("Accept", "text/csv,text/plain,*/*");
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                url, HttpMethod.GET, new HttpEntity<>(headers), String.class);
+
+            String csv = response.getBody();
+            if (csv == null || csv.isBlank() || csv.startsWith("No data")) {
+                log.warn("Stooq veri yok [{}]", stockCode);
+                return Collections.emptyMap();
+            }
+
+            // CSV satırları: Date,Open,High,Low,Close,Volume (en yeni → en eski)
+            Map<String, Double> history = new TreeMap<>();
+            String[] lines = csv.split("\n");
+            for (int i = 1; i < lines.length; i++) {     // ilk satır başlık
+                String[] cols = lines[i].trim().split(",");
+                if (cols.length < 5) continue;
+                String date = cols[0].trim();             // YYYY-MM-DD
+                String closeStr = cols[4].trim();
+                if (closeStr.isEmpty() || closeStr.equals("null")) continue;
+                try {
+                    double close = Double.parseDouble(closeStr);
+                    history.put(date, Math.round(close * 100.0) / 100.0);
+                } catch (NumberFormatException ignored) {}
+            }
+
+            log.info("Stooq hisse geçmişi [{}]: {} nokta", stockCode, history.size());
+            return history;
+
+        } catch (Exception e) {
+            log.error("Stooq hisse geçmişi hatası [{}]: {}", stockCode, e.getMessage());
+            return Collections.emptyMap();
         }
     }
 

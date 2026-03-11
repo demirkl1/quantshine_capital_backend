@@ -187,28 +187,54 @@ public class FundController {
     }
 
     /**
-     * Belirli bir fonun tüm fiyat geçmişini tarih sırasıyla döndürür.
-     * GET /api/funds/history/{fundCode}
+     * Belirli bir fonun fiyat geçmişini tarih sırasıyla döndürür.
+     * filter: 1H, 1A (varsayılan), 3A, 6A, 1Y, ALL
+     * GET /api/funds/history/{fundCode}?filter=1A
      */
     @GetMapping("/history/{fundCode}")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADVISOR')")
     public ResponseEntity<List<Map<String, Object>>> getFullFundHistory(
-            @PathVariable String fundCode) {
+            @PathVariable String fundCode,
+            @RequestParam(defaultValue = "ALL") String filter) {
 
         if (!isValidCode(fundCode)) {
             return ResponseEntity.badRequest().build();
         }
 
-        List<Map<String, Object>> response = historyRepository
-                .findByFundCodeOrderByPriceDateAsc(fundCode.toUpperCase())
-                .stream()
+        LocalDateTime startDate = switch (filter.toUpperCase()) {
+            case "1H"  -> LocalDateTime.now().minusDays(7);
+            case "1A"  -> LocalDateTime.now().minusDays(30);
+            case "3A"  -> LocalDateTime.now().minusDays(90);
+            case "6A"  -> LocalDateTime.now().minusDays(180);
+            case "1Y"  -> LocalDateTime.now().minusDays(365);
+            default    -> LocalDateTime.of(2000, 1, 1, 0, 0); // ALL
+        };
+
+        List<FundPriceHistory> historyList = filter.equalsIgnoreCase("ALL")
+                ? historyRepository.findByFundCodeOrderByPriceDateAsc(fundCode.toUpperCase())
+                : historyRepository.findByFundCodeAndPriceDateAfterOrderByPriceDateAsc(
+                        fundCode.toUpperCase(), startDate);
+
+        List<Map<String, Object>> response = new ArrayList<>(historyList.stream()
                 .map(h -> {
                     Map<String, Object> point = new HashMap<>();
                     point.put("date",  h.getPriceDate().toLocalDate().toString());
                     point.put("price", h.getPrice());
                     return point;
                 })
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
+
+        // Kayıt yoksa mevcut fon fiyatını tek nokta olarak döndür (grafik çizilsin)
+        if (response.isEmpty()) {
+            fundRepository.findByFundCode(fundCode.toUpperCase()).ifPresent(fund -> {
+                if (fund.getCurrentPrice() != null) {
+                    Map<String, Object> point = new HashMap<>();
+                    point.put("date",  LocalDateTime.now().toLocalDate().toString());
+                    point.put("price", fund.getCurrentPrice());
+                    response.add(point);
+                }
+            });
+        }
 
         return ResponseEntity.ok(response);
     }
