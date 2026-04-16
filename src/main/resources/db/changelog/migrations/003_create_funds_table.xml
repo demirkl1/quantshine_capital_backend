@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet id="20260212-1" author="demir">
+        <!-- Funds tablosuna cash_balance kolonu ekle -->
+        <addColumn tableName="funds">
+            <column name="cash_balance" type="DECIMAL(19,2)" defaultValueNumeric="0.00">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <!-- Mevcut fonlara başlangıç nakit bakiyesi ekle (isteğe bağlı) -->
+        <update tableName="funds">
+            <column name="cash_balance" value="500000.00"/>
+            <where>fund_code = 'HSF'</where>
+        </update>
+
+        <update tableName="funds">
+            <column name="cash_balance" value="300000.00"/>
+            <where>fund_code = 'TEK'</where>
+        </update>
+
+        <update tableName="funds">
+            <column name="cash_balance" value="400000.00"/>
+            <where>fund_code = 'MF'</where>
+        </update>
+
+        <rollback>
+            <dropColumn tableName="funds" columnName="cash_balance"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

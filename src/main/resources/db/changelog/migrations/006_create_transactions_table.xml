@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260203-create-transactions-table" author="quantshine">
+        <createTable tableName="transactions">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="investor_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_transaction_investor" referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+            <column name="fund_code" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="amount" type="DECIMAL(19, 2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="lot_count" type="DECIMAL(19, 4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="unit_price" type="DECIMAL(19, 4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20260203-add-advisor-to-transactions" author="quantshine">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="transactions" columnName="advisor_id"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="transactions">
+            <column name="advisor_id" type="BIGINT">
+                <constraints nullable="true" foreignKeyName="fk_transaction_advisor"
+                             referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

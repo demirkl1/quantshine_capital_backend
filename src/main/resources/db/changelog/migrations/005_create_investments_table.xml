@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260203-create-investments-table" author="quantshine">
+        <createTable tableName="investments">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="investor_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_investment_investor" referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+            <column name="advisor_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_investment_advisor" referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+            <column name="fund_code" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="balance" type="DECIMAL(19, 2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20260203-add-lot-count-to-investments" author="quantshine">
+        <addColumn tableName="investments">
+            <column name="lot_count" type="DECIMAL(19, 4)" defaultValueNumeric="0.0000">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

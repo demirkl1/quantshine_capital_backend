@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd">
+
+    <changeSet id="008-1" author="demir">
+        <createTable tableName="fund_price_history">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="fund_code" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="price" type="DECIMAL(19, 4)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="price_date" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="008-2" author="demir">
+        <createIndex indexName="idx_fund_history_code" tableName="fund_price_history">
+            <column name="fund_code"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

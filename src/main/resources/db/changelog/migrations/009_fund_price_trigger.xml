@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.4.xsd">
+
+    <changeSet id="009-1" author="demir" dbms="postgresql">
+        <sql splitStatements="false">
+            -- 1. FONKSİYON: Fiyat değiştiğinde yapılacak işi tanımlar
+            CREATE OR REPLACE FUNCTION log_fund_price_change()
+                RETURNS TRIGGER AS $$
+            BEGIN
+                -- Sadece fiyat gerçekten değişmişse (Eski != Yeni) kayıt atar
+                IF (OLD.current_price IS DISTINCT FROM NEW.current_price) THEN
+                    INSERT INTO fund_price_history (fund_code, price, price_date)
+                    VALUES (NEW.fund_code, NEW.current_price, CURRENT_TIMESTAMP);
+                END IF;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            -- 2. TRIGGER: Bu fonksiyonu 'funds' tablosundaki her UPDATE sonrası çalıştırır
+            DROP TRIGGER IF EXISTS trg_fund_price_update ON funds;
+            CREATE TRIGGER trg_fund_price_update
+                AFTER UPDATE ON funds
+                FOR EACH ROW
+            EXECUTE FUNCTION log_fund_price_change();
+        </sql>
+    </changeSet>
+</databaseChangeLog>
