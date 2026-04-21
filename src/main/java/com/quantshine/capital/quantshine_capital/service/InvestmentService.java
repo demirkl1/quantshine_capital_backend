@@ -60,25 +60,32 @@ public class InvestmentService {
     /**
      * Danışman: advisorId'ye göre yatırımcılar.
      * Admin: yönettiği fonun (managedFundCode) tüm yatırımcıları.
+     *
+     * JSON serileştirmede LazyInitializationException'ı önlemek için
+     * investor/advisor ilişkilerini JOIN FETCH ile yükleyen repository
+     * metodları kullanılıyor.
      */
+    @Transactional(readOnly = true)
     public List<Investment> getMyInvestors(User user) {
         if (user.getRole() == com.quantshine.capital.quantshine_capital.entity.Role.ADMIN) {
             String fundCode = user.getManagedFundCode();
             if (fundCode == null || fundCode.isBlank()) return List.of();
-            return investmentRepository.findByFundCode(fundCode);
+            return investmentRepository.findByFundCodeWithRelations(fundCode);
         }
-        return investmentRepository.findByAdvisorId(user.getId());
+        return investmentRepository.findByAdvisorIdWithRelations(user.getId());
     }
 
     /**
      * Bir yatırımcının tüm portföyünü görmesi için
      */
+    @Transactional(readOnly = true)
     public List<Investment> getMyPortfolio(Long investorId) {
-        return investmentRepository.findByInvestorId(investorId);
+        return investmentRepository.findByInvestorIdWithRelations(investorId);
     }
 
+    @Transactional(readOnly = true)
     public List<User> getMyAdvisors(Long investorId) {
-        List<Investment> investments = investmentRepository.findByInvestorId(investorId);
+        List<Investment> investments = investmentRepository.findByInvestorIdWithRelations(investorId);
         return investments.stream()
                 .map(Investment::getAdvisor)
                 .distinct()

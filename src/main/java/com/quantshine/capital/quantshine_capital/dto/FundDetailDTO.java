@@ -29,6 +29,9 @@ public class FundDetailDTO {
     /** Toplam portföy değeri (₺) */
     private BigDecimal totalValue;
 
+    /** Tüm yatırımcı lotlarının toplamı */
+    private BigDecimal totalLot;
+
     /** Kuruluş tarihi (yyyy-MM-dd) */
     private String inceptionDate;
 

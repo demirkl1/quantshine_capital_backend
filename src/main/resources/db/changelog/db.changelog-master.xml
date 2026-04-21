@@ -21,5 +21,7 @@
     <include file="db/changelog/migrations/014_create_fund_commodity_holdings_table.xml"/>
     <include file="db/changelog/migrations/015_create_commodity_trade_history_table.xml"/>
     <include file="db/changelog/migrations/016_add_fund_metadata.xml"/>
+    <include file="db/changelog/migrations/017_create_market_history_table.xml"/>
+    <include file="db/changelog/migrations/018_add_investing_pair_id.xml"/>
 
 </databaseChangeLog>

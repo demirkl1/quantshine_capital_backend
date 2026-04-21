@@ -1,10 +1,14 @@
 package com.quantshine.capital.quantshine_capital.service;
 
+import com.quantshine.capital.quantshine_capital.entity.MarketHistory;
 import com.quantshine.capital.quantshine_capital.entity.Stock;
+import com.quantshine.capital.quantshine_capital.repository.MarketHistoryRepository;
 import com.quantshine.capital.quantshine_capital.repository.StockRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -13,6 +17,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -23,29 +28,43 @@ public class TradingViewStockUpdateService {
     private static final Logger log = LoggerFactory.getLogger(TradingViewStockUpdateService.class);
 
     private final StockRepository stockRepository;
+    private final MarketHistoryRepository marketHistoryRepository;
     private final RestTemplate restTemplate;
     private final FundService fundService;
+    private final MarketDataService marketDataService;
 
     private static final String TV_URL =
             "https://scanner.tradingview.com/turkey/scan";
 
     /**
-     * Sabah 10:00 — BIST açılışında hisse fiyatlarını ve fon değerlerini güncelle.
-     * Pazartesi-Cuma, Türkiye saati (Europe/Istanbul).
+     * Uygulama açılışında, DB'de hiç hisse yoksa otomatik doldur.
+     * Böylece yeni kurulumlarda/temiz DB'lerde manuel tetikleme gerekmez.
      */
-    @Scheduled(cron = "0 0 10 * * MON-FRI", zone = "Europe/Istanbul")
-    public void updateAtBistOpen() {
-        log.info("BIST AÇILIŞ güncellemesi başlatılıyor... {}", LocalDateTime.now());
-        updateStocksAndFunds();
+    @EventListener(ApplicationReadyEvent.class)
+    public void onStartup() {
+        long count = stockRepository.count();
+        if (count == 0) {
+            log.info("Başlangıçta stok tablosu boş — TradingView'dan ilk yükleme başlatılıyor...");
+            new Thread(() -> {
+                try {
+                    updateStocksAndFunds();
+                } catch (Exception e) {
+                    log.error("Başlangıç yüklemesi hatası: {}", e.getMessage(), e);
+                }
+            }, "tv-startup-fetch").start();
+        } else {
+            log.info("Stok tablosunda {} kayıt mevcut; başlangıç güncellemesi atlandı.", count);
+        }
     }
 
     /**
-     * Öğleden sonra 16:00 — BIST kapanışına 2 saat kala hisse fiyatlarını ve fon değerlerini güncelle.
-     * Pazartesi-Cuma, Türkiye saati (Europe/Istanbul).
+     * BIST işlem saatlerinde her 15 dakikada bir fiyat güncelle.
+     * Pazartesi-Cuma 10:00-18:00, Türkiye saati.
+     * TradingView Scanner free tier ~15dk gecikmeli veri sunar; daha sık istek gereksiz.
      */
-    @Scheduled(cron = "0 0 16 * * MON-FRI", zone = "Europe/Istanbul")
-    public void updateBeforeBistClose() {
-        log.info("BIST KAPANIŞ ÖNCESİ güncellemesi başlatılıyor... {}", LocalDateTime.now());
+    @Scheduled(cron = "0 */15 10-17 * * MON-FRI", zone = "Europe/Istanbul")
+    public void updateDuringMarketHours() {
+        log.info("Piyasa saati güncellemesi başlatılıyor... {}", LocalDateTime.now());
         updateStocksAndFunds();
     }
 
@@ -59,9 +78,50 @@ public class TradingViewStockUpdateService {
             int updated = fetchAndSaveAll();
             log.info("{} hisse güncellendi. Fon fiyatları hesaplanıyor...", updated);
             fundService.updateAllFundPrices();
+            captureMarketSnapshots();
         } catch (Exception e) {
             log.error("Güncelleme hatası: {}", e.getMessage(), e);
         }
+    }
+
+    /**
+     * Piyasa referans sembolleri (BIST100, USDTRY, EURTRY, GOLD, SILVER, THYAO)
+     * için anlık fiyatı TradingView Scanner'dan alıp günlük snapshot olarak
+     * market_history tablosuna yazar. Aynı gün için varsa günceller.
+     * Böylece günler geçtikçe gerçek benchmark tarihsel serisi birikir.
+     */
+    @Transactional
+    public void captureMarketSnapshots() {
+        LocalDate today = LocalDate.now();
+        Map<String, String[]> targets = Map.of(
+            "USD",    new String[]{"FX_IDC:USDTRY", "forex"},
+            "EUR",    new String[]{"FX_IDC:EURTRY", "forex"},
+            "BIST",   new String[]{"BIST:XU100",    "turkey"},
+            "GOLD",   new String[]{"TVC:GOLD",      "cfd"},
+            "SILVER", new String[]{"TVC:SILVER",    "cfd"},
+            "THYAO",  new String[]{"BIST:THYAO",    "turkey"}
+        );
+
+        int saved = 0;
+        for (Map.Entry<String, String[]> entry : targets.entrySet()) {
+            try {
+                Double price = marketDataService.fetchTvScannerPrice(
+                        entry.getValue()[0], entry.getValue()[1]);
+                if (price == null) continue;
+
+                MarketHistory row = marketHistoryRepository
+                        .findBySymbolAndDate(entry.getKey(), today)
+                        .orElse(new MarketHistory());
+                row.setSymbol(entry.getKey());
+                row.setDate(today);
+                row.setClose(BigDecimal.valueOf(price).setScale(4, RoundingMode.HALF_UP));
+                marketHistoryRepository.save(row);
+                saved++;
+            } catch (Exception e) {
+                log.warn("Piyasa snapshot hatası [{}]: {}", entry.getKey(), e.getMessage());
+            }
+        }
+        log.info("{} piyasa sembolü için günlük snapshot kaydedildi", saved);
     }
 
     @Transactional

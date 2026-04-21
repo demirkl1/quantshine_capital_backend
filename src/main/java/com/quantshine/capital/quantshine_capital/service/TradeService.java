@@ -29,6 +29,7 @@ public class TradeService {
     private final FundRepository fundRepository;
     private final FundStockHoldingRepository fundStockHoldingRepository;
     private final FundCommodityHoldingRepository fundCommodityHoldingRepository;
+    private final FundService fundService;
 
     @Transactional
     @CacheEvict(cacheNames = {"adminStats", "advisorStats", "investorFunds"}, allEntries = true)
@@ -44,12 +45,26 @@ public class TradeService {
                 .orElseThrow(() -> new RuntimeException("Yatırımcı bulunamadı: " + investorTc));
 
         User advisor = userRepository.findByKeycloakId(advisorKeycloakId)
-                .orElseThrow(() -> new RuntimeException("Yetkili (Danışman) bulunamadı!"));
+                .orElseThrow(() -> new RuntimeException(
+                        "İşlemi yapan kullanıcı sistemde bulunamadı (keycloakId=" + advisorKeycloakId + "). Lütfen tekrar giriş yapın."));
 
+        // Yatırım kaydı yoksa BUY durumunda giriş yapan yetkili (ADMIN/ADVISOR) advisor
+        // olarak atanır ve kayıt otomatik açılır. SELL için mevcut kayıt zorunludur.
         Investment invRecord = investmentRepository
                 .findByInvestorIdAndFundCode(investor.getId(), fundCode.toUpperCase())
-                .orElseThrow(() -> new RuntimeException(
-                        "Bu fon (" + fundCode + ") için yatırım kaydı bulunamadı!"));
+                .orElseGet(() -> {
+                    if (type != TransactionType.BUY) {
+                        throw new RuntimeException(
+                                "Bu fon (" + fundCode + ") için yatırım kaydı bulunamadı!");
+                    }
+                    Investment fresh = new Investment();
+                    fresh.setInvestor(investor);
+                    fresh.setAdvisor(advisor);
+                    fresh.setFundCode(fundCode.toUpperCase());
+                    fresh.setBalance(BigDecimal.ZERO);
+                    fresh.setLotCount(BigDecimal.ZERO);
+                    return investmentRepository.save(fresh);
+                });
 
         BigDecimal lotCount = amount.divide(actualPrice, 4, RoundingMode.HALF_UP);
         BigDecimal fundCash = fund.getCashBalance() != null ? fund.getCashBalance() : BigDecimal.ZERO;
@@ -168,18 +183,19 @@ public class TradeService {
                     .map(h -> h.getAvgCost().multiply(h.getLotCount()))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            BigDecimal commoditiesValue = commoditiesByFund.getOrDefault(code, List.of()).stream()
-                    .map(h -> h.getTotalCostTry() != null ? h.getTotalCostTry() : BigDecimal.ZERO)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            List<FundCommodityHolding> commHoldings = commoditiesByFund.getOrDefault(code, List.of());
+            BigDecimal commoditiesMarket = fundService.calcCommoditiesMarketValue(commHoldings);
+            BigDecimal commoditiesCost   = fundService.calcCommoditiesCost(commHoldings);
 
             BigDecimal cash = fund.getCashBalance() != null ? fund.getCashBalance() : BigDecimal.ZERO;
             if (cash.compareTo(BigDecimal.ZERO) == 0) {
                 BigDecimal totalInvested = investedByFund.getOrDefault(code, BigDecimal.ZERO);
-                cash = totalInvested.subtract(stocksCost).subtract(commoditiesValue).max(BigDecimal.ZERO);
+                cash = totalInvested.subtract(stocksCost).subtract(commoditiesCost).max(BigDecimal.ZERO);
             }
 
-            BigDecimal totalValue = cash.add(stocksCurrent).add(commoditiesValue);
-            BigDecimal kz         = stocksCurrent.subtract(stocksCost);
+            BigDecimal totalValue = cash.add(stocksCurrent).add(commoditiesMarket);
+            BigDecimal kz         = stocksCurrent.subtract(stocksCost)
+                                                 .add(commoditiesMarket.subtract(commoditiesCost));
 
             sirketFonBuyuklugu = sirketFonBuyuklugu.add(totalValue);
             sirketKarZarar     = sirketKarZarar.add(kz);
@@ -349,10 +365,10 @@ public class TradeService {
                 .map(h -> h.getAvgCost().multiply(h.getLotCount()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal commoditiesValue = fundCommodityHoldingRepository
-                .findByFundCode(managedFundCode.toUpperCase()).stream()
-                .map(h -> h.getTotalCostTry() != null ? h.getTotalCostTry() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        List<FundCommodityHolding> commHoldings = fundCommodityHoldingRepository
+                .findByFundCode(managedFundCode.toUpperCase());
+        BigDecimal commoditiesMarket = fundService.calcCommoditiesMarketValue(commHoldings);
+        BigDecimal commoditiesCost   = fundService.calcCommoditiesCost(commHoldings);
 
         BigDecimal cashBalance = fund.getCashBalance() != null ? fund.getCashBalance() : BigDecimal.ZERO;
         if (cashBalance.compareTo(BigDecimal.ZERO) == 0) {
@@ -360,13 +376,15 @@ public class TradeService {
                     .stream()
                     .map(inv -> inv.getBalance() != null ? inv.getBalance() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            cashBalance = totalInvested.subtract(stocksCostValue).subtract(commoditiesValue).max(BigDecimal.ZERO);
+            cashBalance = totalInvested.subtract(stocksCostValue).subtract(commoditiesCost).max(BigDecimal.ZERO);
         }
 
-        BigDecimal fonBuyuklugu = cashBalance.add(stocksCurrentValue).add(commoditiesValue);
-        BigDecimal karZararTl   = stocksCurrentValue.subtract(stocksCostValue);
-        String karZararYuzde = stocksCostValue.compareTo(BigDecimal.ZERO) > 0
-                ? karZararTl.divide(stocksCostValue, 4, RoundingMode.HALF_UP)
+        BigDecimal fonBuyuklugu = cashBalance.add(stocksCurrentValue).add(commoditiesMarket);
+        BigDecimal karZararTl   = stocksCurrentValue.subtract(stocksCostValue)
+                                                     .add(commoditiesMarket.subtract(commoditiesCost));
+        BigDecimal totalCost    = stocksCostValue.add(commoditiesCost);
+        String karZararYuzde = totalCost.compareTo(BigDecimal.ZERO) > 0
+                ? karZararTl.divide(totalCost, 4, RoundingMode.HALF_UP)
                         .multiply(new BigDecimal("100")).setScale(2, RoundingMode.HALF_UP).toString()
                 : "0.00";
 

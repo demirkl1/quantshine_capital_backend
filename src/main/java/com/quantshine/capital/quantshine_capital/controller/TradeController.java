@@ -2,6 +2,7 @@ package com.quantshine.capital.quantshine_capital.controller;
 
 import com.quantshine.capital.quantshine_capital.service.StockService;
 import com.quantshine.capital.quantshine_capital.service.TradeService;
+import com.quantshine.capital.quantshine_capital.service.UserService;
 import com.quantshine.capital.quantshine_capital.entity.TransactionType;
 import com.quantshine.capital.quantshine_capital.entity.User;
 import com.quantshine.capital.quantshine_capital.entity.Investment;
@@ -32,6 +33,7 @@ public class TradeController {
     private final UserRepository userRepository;
     private final InvestmentRepository investmentRepository;
     private final StockService stockService;
+    private final UserService userService;
 
     @GetMapping("/all-history")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADVISOR')")
@@ -58,6 +60,9 @@ public class TradeController {
             @RequestBody Map<String, Object> payload,
             @AuthenticationPrincipal Jwt jwt) {
         try {
+            // Keycloak'tan gelen kullanıcı local DB'de yoksa (örn. admin /users/me'yi
+            // hiç çağırmadıysa) önce senkronla — aksi halde advisor lookup patlar.
+            userService.ensureSyncedFromJwt(jwt);
             String advisorKeycloakId = jwt.getSubject();
             String investorTc = (String) payload.get("investorTc");
             String fundCode = (String) payload.get("fundCode");

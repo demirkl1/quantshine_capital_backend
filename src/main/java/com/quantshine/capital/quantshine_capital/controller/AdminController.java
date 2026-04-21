@@ -84,10 +84,12 @@ public class AdminController {
      * Bu admin'e atanmış yatırımcıları ve portföy özetlerini listeler.
      */
     @GetMapping("/my-investors")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<Map<String, Object>>> getMyInvestors(@AuthenticationPrincipal Jwt jwt) {
         User admin = userRepository.findByKeycloakId(jwt.getSubject())
                 .orElseThrow(() -> new RuntimeException("Admin bulunamadı"));
-        List<Investment> investments = investmentRepository.findByAdvisorId(admin.getId());
+        // OIV=false olduğu için lazy ilişkiyi JOIN FETCH ile yükle
+        List<Investment> investments = investmentRepository.findByAdvisorIdWithRelations(admin.getId());
         List<Map<String, Object>> result = investments.stream().map(inv -> {
             User investor = inv.getInvestor();
             BigDecimal fundPrice = fundRepository.findByFundCode(inv.getFundCode())

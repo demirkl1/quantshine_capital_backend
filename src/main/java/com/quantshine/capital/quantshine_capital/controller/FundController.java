@@ -192,7 +192,7 @@ public class FundController {
      * GET /api/funds/history/{fundCode}?filter=1A
      */
     @GetMapping("/history/{fundCode}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'ADVISOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADVISOR', 'INVESTOR')")
     public ResponseEntity<List<Map<String, Object>>> getFullFundHistory(
             @PathVariable String fundCode,
             @RequestParam(defaultValue = "ALL") String filter) {

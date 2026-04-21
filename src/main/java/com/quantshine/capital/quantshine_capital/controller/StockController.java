@@ -1,6 +1,7 @@
 package com.quantshine.capital.quantshine_capital.controller;
 
 import com.quantshine.capital.quantshine_capital.entity.Stock;
+import com.quantshine.capital.quantshine_capital.service.InvestingChartService;
 import com.quantshine.capital.quantshine_capital.service.StockService;
 import com.quantshine.capital.quantshine_capital.service.TradingViewStockUpdateService;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class StockController {
 
     private final StockService stockService;
     private final TradingViewStockUpdateService tradingViewStockUpdateService;
+    private final InvestingChartService investingChartService;
 
     // Tüm hisseleri getir
     @GetMapping
@@ -30,6 +32,40 @@ public class StockController {
         List<Stock> stocks = stockService.getAllStocks();
         log.debug("getAllStocks: {} hisse döndü", stocks.size());
         return ResponseEntity.ok(stocks);
+    }
+
+    /**
+     * Investing.com grafik widget meta bilgisi.
+     * Frontend bunu alıp {@code iframeUrl}'i iframe'e basıyor.
+     * pair_ID bulunamazsa {@code iframeUrl} null döner.
+     */
+    @GetMapping("/{code}/chart-meta")
+    public ResponseEntity<Map<String, Object>> getChartMeta(@PathVariable String code) {
+        Long pairId = investingChartService.resolvePairId(code);
+        String url  = investingChartService.buildChartUrl(pairId);
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("stockCode", code.toUpperCase());
+        body.put("pairId",    pairId);
+        body.put("iframeUrl", url);
+        return ResponseEntity.ok(body);
+    }
+
+    /**
+     * Manuel pair_ID ata (Investing search bot korumasına takıldığında).
+     * Investing.com'da hissenin sayfasına git, URL'deki pair_ID'yi kopyala.
+     */
+    @PostMapping("/{code}/pair-id")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADVISOR')")
+    public ResponseEntity<?> setPairId(@PathVariable String code,
+                                       @RequestBody Map<String, Object> payload) {
+        try {
+            Long pairId = Long.parseLong(payload.get("pairId").toString());
+            Stock saved = investingChartService.setPairId(code, pairId);
+            if (saved == null) return ResponseEntity.notFound().build();
+            return ResponseEntity.ok(saved);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Hata: " + e.getMessage());
+        }
     }
 
     // TradingView ile tüm BIST güncelle

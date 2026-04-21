@@ -41,7 +41,8 @@ public class CacheConfig {
             "fundDetail",
             "advisorStats",
             "adminStats",
-            "investorFunds"
+            "investorFunds",
+            "news"
         ));
 
         return manager;

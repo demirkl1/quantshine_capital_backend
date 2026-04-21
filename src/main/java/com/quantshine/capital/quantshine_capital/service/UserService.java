@@ -143,6 +143,51 @@ public class UserService {
         }
     }
     /**
+     * JWT → User stub → senkronizasyon. `/users/me` çağrılmadan önce trade vb.
+     * endpointler de kullanıcıyı local DB'ye yansıtabilsin diye tek giriş noktası.
+     */
+    @Transactional
+    public User ensureSyncedFromJwt(org.springframework.security.oauth2.jwt.Jwt jwt) {
+        User u = new User();
+        u.setKeycloakId(jwt.getSubject());
+        String email = jwt.getClaimAsString("email");
+        String preferredUsername = jwt.getClaimAsString("preferred_username");
+        u.setEmail(email != null ? email
+                : (preferredUsername != null ? preferredUsername : jwt.getSubject()) + "@local");
+
+        // Keycloak'tan given_name/family_name gelmeyebilir (ör. manuel oluşturulmuş admin).
+        // DB'de first_name/last_name NOT NULL olduğu için her durumda dolu olmalı.
+        String given = jwt.getClaimAsString("given_name");
+        String family = jwt.getClaimAsString("family_name");
+        String name = jwt.getClaimAsString("name");
+        if ((given == null || given.isBlank()) && name != null && !name.isBlank()) {
+            String[] parts = name.trim().split("\\s+", 2);
+            given = parts[0];
+            if ((family == null || family.isBlank()) && parts.length > 1) family = parts[1];
+        }
+        if (given == null || given.isBlank()) {
+            given = preferredUsername != null && !preferredUsername.isBlank()
+                    ? preferredUsername
+                    : (email != null && email.contains("@") ? email.substring(0, email.indexOf('@')) : "User");
+        }
+        if (family == null || family.isBlank()) family = "-";
+        u.setFirstName(given);
+        u.setLastName(family);
+        try {
+            java.util.Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+            if (realmAccess != null) {
+                Object rolesObj = realmAccess.get("roles");
+                if (rolesObj instanceof List<?> roles) {
+                    if (roles.contains("ADMIN"))         u.setRole(Role.ADMIN);
+                    else if (roles.contains("ADVISOR"))  u.setRole(Role.ADVISOR);
+                    else                                 u.setRole(Role.INVESTOR);
+                }
+            }
+        } catch (Exception ignored) { /* rol okunamazsa syncUserWithIdp varsayılanı kullanır */ }
+        return syncUserWithIdp(u);
+    }
+
+    /**
      * 2. Senkronizasyon Motoru: Giriş anında Keycloak verilerini DB ile eşler.
      */
     @Transactional
@@ -169,6 +214,16 @@ public class UserService {
                     if (userFromIdp.getTcNo() == null) {
                         String kc = userFromIdp.getKeycloakId().replace("-", "");
                         userFromIdp.setTcNo(kc.substring(0, Math.min(11, kc.length())));
+                    }
+                    // first_name / last_name NOT NULL — IDP claim'i yoksa placeholder
+                    if (userFromIdp.getFirstName() == null || userFromIdp.getFirstName().isBlank()) {
+                        userFromIdp.setFirstName("User");
+                    }
+                    if (userFromIdp.getLastName() == null || userFromIdp.getLastName().isBlank()) {
+                        userFromIdp.setLastName("-");
+                    }
+                    if (userFromIdp.getEmail() == null || userFromIdp.getEmail().isBlank()) {
+                        userFromIdp.setEmail(userFromIdp.getKeycloakId() + "@local");
                     }
                     userFromIdp.setApproved(true);
                     userFromIdp.setPassword(null);

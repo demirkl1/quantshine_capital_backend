@@ -20,6 +20,17 @@ public interface InvestmentRepository extends JpaRepository<Investment, Long> {
     void deleteByInvestorId(@Param("investorId") Long investorId);
     List<Investment> findByAdvisorId(Long advisorId);
     List<Investment> findByFundCode(String fundCode);
+
+    // JSON serileştirme sırasında LazyInitializationException'ı önlemek için
+    // investor ve advisor ilişkileri aynı sorguda yükleniyor.
+    @Query("SELECT i FROM Investment i JOIN FETCH i.investor JOIN FETCH i.advisor WHERE i.advisor.id = :advisorId")
+    List<Investment> findByAdvisorIdWithRelations(@Param("advisorId") Long advisorId);
+
+    @Query("SELECT i FROM Investment i JOIN FETCH i.investor JOIN FETCH i.advisor WHERE i.fundCode = :fundCode")
+    List<Investment> findByFundCodeWithRelations(@Param("fundCode") String fundCode);
+
+    @Query("SELECT i FROM Investment i JOIN FETCH i.investor JOIN FETCH i.advisor WHERE i.investor.id = :investorId")
+    List<Investment> findByInvestorIdWithRelations(@Param("investorId") Long investorId);
     boolean existsByInvestorIdAndFundCode(Long investorId, String fundCode);
 
     @Query("SELECT i.advisor FROM Investment i WHERE i.investor.id = :investorId AND i.fundCode = :fundCode")

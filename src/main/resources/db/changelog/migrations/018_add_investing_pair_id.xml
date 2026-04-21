@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="018" author="quantshine">
+        <addColumn tableName="stocks">
+            <column name="investing_pair_id" type="BIGINT"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="stocks" columnName="investing_pair_id"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

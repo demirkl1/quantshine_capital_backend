@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +35,7 @@ public class FundService {
     private final FundCommodityHoldingRepository  fundCommodityHoldingRepository;
     private final InvestmentRepository            investmentRepository;
     private final UserRepository                  userRepository;
+    private final CommodityService                commodityService;
 
     // ════════════════════════════════════════════════════════════
     //  Fiyat güncelleme
@@ -118,6 +120,17 @@ public class FundService {
             }
         }
         log.info("Tüm fon fiyatları güncellendi.");
+    }
+
+    /**
+     * Her gün 18:35 (TR) — BIST kapanışı + piyasa snapshot sonrası —
+     * tüm fonların birim fiyatını günceller ve geçmişe kaydeder.
+     * Böylece fon grafiği zaman içinde gerçek bir seri oluşturur.
+     */
+    @Scheduled(cron = "0 35 18 * * *", zone = "Europe/Istanbul")
+    public void dailyFundPriceSnapshot() {
+        log.info("Günlük fon fiyat snapshot'ı başlıyor...");
+        updateAllFundPrices();
     }
 
     // ════════════════════════════════════════════════════════════
@@ -221,6 +234,13 @@ public class FundService {
         dto.setTefas(fund.getTefas());
         dto.setPrice(cur);
         dto.setTotalValue(total);
+
+        BigDecimal totalLot = investmentRepository.findByFundCode(code).stream()
+                .map(Investment::getLotCount)
+                .filter(java.util.Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        dto.setTotalLot(totalLot);
+
         dto.setInceptionDate(fund.getInceptionDate() != null
                 ? fund.getInceptionDate().toString() : null);
         dto.setRiskLevel(fund.getRiskLevel());
@@ -266,6 +286,8 @@ public class FundService {
     /**
      * Toplam portföy değeri hesaplar.
      * Holdings dışarıdan verilir — tekrar sorgu yapılmaz.
+     * Emtia pozisyonları ANLIK piyasa değeriyle (lot × currentPrice × usdtryRate)
+     * değerlenir; fiyat çekilememişse maliyet bedeline düşer.
      */
     public BigDecimal calcTotalPortfolioValue(Fund fund,
                                                List<FundStockHolding> stockHoldings,
@@ -273,11 +295,18 @@ public class FundService {
         BigDecimal total = fund.getCashBalance() != null ? fund.getCashBalance() : BigDecimal.ZERO;
 
         for (FundStockHolding h : stockHoldings) {
-            total = total.add(h.getLotCount().multiply(h.getStock().getCurrentPrice()));
+            BigDecimal price = h.getStock().getCurrentPrice();
+            if (price == null) continue;
+            total = total.add(h.getLotCount().multiply(price));
         }
 
+        BigDecimal usdTry = commodityService.getUsdtryRate();
         for (FundCommodityHolding h : commodityHoldings) {
-            if (h.getTotalCostTry() != null) {
+            BigDecimal priceUsd = h.getCommodity() != null
+                    ? h.getCommodity().getCurrentPrice() : null;
+            if (priceUsd != null && h.getLotCount() != null && usdTry != null) {
+                total = total.add(h.getLotCount().multiply(priceUsd).multiply(usdTry));
+            } else if (h.getTotalCostTry() != null) {
                 total = total.add(h.getTotalCostTry());
             }
         }
@@ -292,6 +321,34 @@ public class FundService {
             fundStockHoldingRepository.findByFundCode(fund.getFundCode()),
             fundCommodityHoldingRepository.findByFundCode(fund.getFundCode())
         );
+    }
+
+    /**
+     * Emtia pozisyonlarının ANLIK piyasa değerini TL cinsinden hesaplar.
+     * Dashboard ve istatistik servisleri (TradeService) bu helper'ı kullanmalı —
+     * maliyet bedeli (totalCostTry) zaman içinde gerçek değerden sapar.
+     */
+    public BigDecimal calcCommoditiesMarketValue(List<FundCommodityHolding> holdings) {
+        if (holdings == null || holdings.isEmpty()) return BigDecimal.ZERO;
+        BigDecimal usdTry = commodityService.getUsdtryRate();
+        return holdings.stream()
+                .map(h -> {
+                    BigDecimal priceUsd = h.getCommodity() != null
+                            ? h.getCommodity().getCurrentPrice() : null;
+                    if (priceUsd != null && h.getLotCount() != null && usdTry != null) {
+                        return h.getLotCount().multiply(priceUsd).multiply(usdTry);
+                    }
+                    return h.getTotalCostTry() != null ? h.getTotalCostTry() : BigDecimal.ZERO;
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** Emtia pozisyonlarının toplam maliyet bedeli (TL). K/Z hesabı için referans. */
+    public BigDecimal calcCommoditiesCost(List<FundCommodityHolding> holdings) {
+        if (holdings == null || holdings.isEmpty()) return BigDecimal.ZERO;
+        return holdings.stream()
+                .map(h -> h.getTotalCostTry() != null ? h.getTotalCostTry() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /**
@@ -311,9 +368,16 @@ public class FundService {
             items.add(new AllocationItemDTO("Hisse Senedi", pct(stocksTotal, totalValue)));
         }
 
+        BigDecimal usdTry = commodityService.getUsdtryRate();
         BigDecimal commoditiesTotal = commodityHoldings.stream()
-                .filter(h -> h.getTotalCostTry() != null)
-                .map(FundCommodityHolding::getTotalCostTry)
+                .map(h -> {
+                    BigDecimal priceUsd = h.getCommodity() != null
+                            ? h.getCommodity().getCurrentPrice() : null;
+                    if (priceUsd != null && h.getLotCount() != null && usdTry != null) {
+                        return h.getLotCount().multiply(priceUsd).multiply(usdTry);
+                    }
+                    return h.getTotalCostTry() != null ? h.getTotalCostTry() : BigDecimal.ZERO;
+                })
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         if (commoditiesTotal.compareTo(BigDecimal.ZERO) > 0) {

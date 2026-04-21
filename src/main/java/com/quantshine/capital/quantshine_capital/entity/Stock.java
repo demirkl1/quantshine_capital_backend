@@ -31,4 +31,7 @@ public class Stock {
     private String changePercent; // Yüzde değişim
 
     private LocalDateTime lastUpdate; // Son güncelleme zamanı
+
+    @Column(name = "investing_pair_id")
+    private Long investingPairId; // Investing.com chart widget pair_ID — cache
 }
