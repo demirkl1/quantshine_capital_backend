@@ -7,7 +7,7 @@
 
     <include file="db/changelog/migrations/001_create_users_table.xml"/>
     <include file="db/changelog/migrations/002_create_user_advisors_table.xml"/>
-    <include file="/db/changelog/migrations/003_create_funds_table.xml"/>
+    <include file="db/changelog/migrations/003_create_funds_table.xml"/>
     <include file="db/changelog/migrations/004_add_managed_fund_to_users.xml"/>
     <include file="db/changelog/migrations/005_create_investments_table.xml"/>
     <include file="db/changelog/migrations/006_create_transactions_table.xml"/>
