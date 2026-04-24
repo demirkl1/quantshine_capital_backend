@@ -23,5 +23,6 @@
     <include file="db/changelog/migrations/016_add_fund_metadata.xml"/>
     <include file="db/changelog/migrations/017_create_market_history_table.xml"/>
     <include file="db/changelog/migrations/018_add_investing_pair_id.xml"/>
+    <include file="db/changelog/migrations/019_fix_stocks_price_precision.xml"/>
 
 </databaseChangeLog>
