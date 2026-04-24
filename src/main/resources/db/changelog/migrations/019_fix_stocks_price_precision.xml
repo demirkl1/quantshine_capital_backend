@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="019" author="quantshine">
+        <comment>
+            DECIMAL(10,4) 999.999,9999'u aşamıyordu; BIST'te 1M TRY üstü hisseler
+            insert'te "numeric field overflow" veriyordu. DECIMAL(14,4)'e çıkarıyoruz
+            (max ~9,999,999,999.9999 — ileride de yetecek rezervle).
+        </comment>
+
+        <modifyDataType tableName="stocks" columnName="current_price"  newDataType="DECIMAL(14,4)"/>
+        <modifyDataType tableName="stocks" columnName="previous_close" newDataType="DECIMAL(14,4)"/>
+        <modifyDataType tableName="stocks" columnName="price_change"   newDataType="DECIMAL(14,4)"/>
+
+        <rollback>
+            <modifyDataType tableName="stocks" columnName="current_price"  newDataType="DECIMAL(10,4)"/>
+            <modifyDataType tableName="stocks" columnName="previous_close" newDataType="DECIMAL(10,4)"/>
+            <modifyDataType tableName="stocks" columnName="price_change"   newDataType="DECIMAL(10,4)"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
