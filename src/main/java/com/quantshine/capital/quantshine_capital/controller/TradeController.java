@@ -23,8 +23,11 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/trade")
@@ -43,8 +46,7 @@ public class TradeController {
      * Rol bazlı @PreAuthorize tek başına yetmez — danışmanlar arası BOLA'yı önler.
      */
     private void assertCanTradeFund(Jwt jwt, String fundCode) {
-        User actor = userRepository.findByKeycloakId(jwt.getSubject())
-                .orElseThrow(() -> new AccessDeniedException("Yetkili kullanıcı bulunamadı."));
+        User actor = resolveActor(jwt);
         if (actor.getRole() == Role.ADMIN) return;
         String managed = actor.getManagedFundCode();
         if (managed == null || fundCode == null || !managed.equalsIgnoreCase(fundCode)) {
@@ -52,11 +54,32 @@ public class TradeController {
         }
     }
 
+    /** JWT'den aktif kullanıcıyı DB'den çözer. */
+    private User resolveActor(Jwt jwt) {
+        return userRepository.findByKeycloakId(jwt.getSubject())
+                .orElseThrow(() -> new AccessDeniedException("Yetkili kullanıcı bulunamadı."));
+    }
+
+    /**
+     * Listeyi okuyan kullanıcıya göre kapsar: ADMIN tümünü görür; ADVISOR yalnızca
+     * yönettiği fonu; fonu olmayan ADVISOR boş liste alır. Danışmanlar-arası veri
+     * sızıntısını (BOLA) önler.
+     */
+    private List<Map<String, Object>> scopeByFund(Jwt jwt, List<Map<String, Object>> all, String fundKey) {
+        User actor = resolveActor(jwt);
+        if (actor.getRole() == Role.ADMIN) return all;
+        String managed = actor.getManagedFundCode();
+        if (managed == null) return List.of();
+        return all.stream()
+                .filter(m -> managed.equalsIgnoreCase(String.valueOf(m.get(fundKey))))
+                .collect(Collectors.toList());
+    }
+
     @GetMapping("/all-history")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADVISOR')")
-    public ResponseEntity<List<Map<String, Object>>> getAllHistory() {
-        // TradeService içindeki zenginleştirilmiş geçmiş verisini döner
-        return ResponseEntity.ok(tradeService.getAllHistoryEnriched());
+    public ResponseEntity<List<Map<String, Object>>> getAllHistory(@AuthenticationPrincipal Jwt jwt) {
+        // ADMIN tümünü, ADVISOR yalnızca kendi fonunu görür.
+        return ResponseEntity.ok(scopeByFund(jwt, tradeService.getAllHistoryEnriched(), "fundCode"));
     }
 
     @GetMapping("/admin-stats")
@@ -97,8 +120,33 @@ public class TradeController {
 
     @GetMapping("/all-investors-detailed")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADVISOR')")
-    public ResponseEntity<List<Map<String, Object>>> getAllInvestorsDetailed() {
-        return ResponseEntity.ok(tradeService.getAllInvestorsWithDetailedPortfolios());
+    public ResponseEntity<List<Map<String, Object>>> getAllInvestorsDetailed(@AuthenticationPrincipal Jwt jwt) {
+        List<Map<String, Object>> all = tradeService.getAllInvestorsWithDetailedPortfolios();
+        User actor = resolveActor(jwt);
+        if (actor.getRole() == Role.ADMIN) return ResponseEntity.ok(all);
+
+        // ADVISOR: yalnızca yönettiği fondaki holding'leri içeren yatırımcılar.
+        String managed = actor.getManagedFundCode();
+        if (managed == null) return ResponseEntity.ok(List.of());
+
+        List<Map<String, Object>> scoped = new ArrayList<>();
+        for (Map<String, Object> inv : all) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> holdings = (List<Map<String, Object>>) inv.get("holdings");
+            if (holdings == null) continue;
+            List<Map<String, Object>> kept = holdings.stream()
+                    .filter(h -> managed.equalsIgnoreCase(String.valueOf(h.get("fundCode"))))
+                    .collect(Collectors.toList());
+            if (kept.isEmpty()) continue;
+            Map<String, Object> copy = new HashMap<>(inv);
+            copy.put("holdings", kept);
+            BigDecimal total = kept.stream()
+                    .map(h -> (BigDecimal) h.get("tlValue"))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            copy.put("totalPortfolioValue", total);
+            scoped.add(copy);
+        }
+        return ResponseEntity.ok(scoped);
     }
 
     @PostMapping("/stock-execute")
@@ -122,7 +170,15 @@ public class TradeController {
     }
     @GetMapping("/stock-history")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADVISOR')")
-    public ResponseEntity<?> getStockTradeHistory(@RequestParam(required = false) String fundCode) {
+    public ResponseEntity<?> getStockTradeHistory(@RequestParam(required = false) String fundCode,
+                                                  @AuthenticationPrincipal Jwt jwt) {
+        User actor = resolveActor(jwt);
+        // ADVISOR fonu ne olursa olsun yalnızca kendi yönettiği fonun geçmişini görür.
+        if (actor.getRole() != Role.ADMIN) {
+            String managed = actor.getManagedFundCode();
+            if (managed == null) return ResponseEntity.ok(List.of());
+            return ResponseEntity.ok(stockService.getStockTradeHistory(managed));
+        }
         if (fundCode != null && !fundCode.isEmpty()) {
             return ResponseEntity.ok(stockService.getStockTradeHistory(fundCode));
         }

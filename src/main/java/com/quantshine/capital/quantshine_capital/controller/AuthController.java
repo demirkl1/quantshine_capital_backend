@@ -7,6 +7,8 @@ import com.quantshine.capital.quantshine_capital.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
@@ -20,6 +22,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     private final UserService userService;
     private final LoginRateLimiter loginRateLimiter;
@@ -39,7 +43,11 @@ public class AuthController {
             userService.registerPendingUser(userDto);
             return ResponseEntity.status(HttpStatus.CREATED).body("Kayıt isteği alındı, admin onayı bekleniyor.");
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Kayıt hatası: " + e.getMessage());
+            // Ayrıntıyı yalnızca logla; istemciye generic mesaj — kullanıcı/e-posta
+            // enumerasyonunu önler (örn. "e-posta zaten mevcut" sızdırmaz).
+            log.warn("Kayıt başarısız: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("Kayıt işlemi tamamlanamadı. Bilgilerinizi kontrol edip tekrar deneyin.");
         }
     }
 
@@ -73,7 +81,15 @@ public class AuthController {
     }
 
     private String getClientIp(HttpServletRequest request) {
+        // X-Forwarded-For istemci tarafından sahte gönderilebilir; güvenilir tek
+        // değer, önümüzdeki nginx'in EKLEDİĞİ SON adrestir. İlk değeri almak
+        // (eski davranış) saldırganın her istekte yeni "IP" üreterek rate-limit'i
+        // atlamasına izin verirdi.
         String forwarded = request.getHeader("X-Forwarded-For");
-        return (forwarded != null) ? forwarded.split(",")[0].trim() : request.getRemoteAddr();
+        if (forwarded != null && !forwarded.isBlank()) {
+            String[] parts = forwarded.split(",");
+            return parts[parts.length - 1].trim();
+        }
+        return request.getRemoteAddr();
     }
 }
