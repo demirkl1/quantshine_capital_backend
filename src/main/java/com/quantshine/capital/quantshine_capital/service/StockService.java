@@ -163,13 +163,24 @@ public class StockService {
 
     // Hisse alım/satım işlemi
     @Transactional
-    public String executeStockTrade(String fundCode, String stockCode, BigDecimal lot,
-                                    BigDecimal price, String type) {
+    public String executeStockTrade(String fundCode, String stockCode, BigDecimal lot, String type) {
+        // ── Girdi doğrulama ──────────────────────────────────────────────
+        if (lot == null || lot.signum() <= 0) {
+            throw new IllegalArgumentException("Lot adedi pozitif olmalıdır.");
+        }
+
         Fund fund = fundRepository.findByFundCode(fundCode.toUpperCase())
                 .orElseThrow(() -> new RuntimeException("Fon bulunamadı: " + fundCode));
 
         Stock stock = stockRepository.findByStockCode(stockCode.toUpperCase())
                 .orElseThrow(() -> new RuntimeException("Hisse bulunamadı: " + stockCode));
+
+        // ── Fiyat SUNUCU tarafında piyasadan alınır — istemci fiyatı kabul edilmez.
+        // Aksi halde keyfi fiyat göndererek fon bakiyesi/K-Z manipüle edilebilir.
+        BigDecimal price = stock.getCurrentPrice();
+        if (price == null || price.signum() <= 0) {
+            throw new IllegalArgumentException("Hisse için geçerli bir piyasa fiyatı yok: " + stockCode);
+        }
 
         BigDecimal totalAmount = price.multiply(lot);
 
