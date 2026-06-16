@@ -10,6 +10,7 @@ import com.quantshine.capital.quantshine_capital.repository.UserRepository;
 import com.quantshine.capital.quantshine_capital.repository.InvestmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -115,7 +116,21 @@ public class UserController {
 
     @GetMapping("/{investorId}/portfolio")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADVISOR')")
-    public ResponseEntity<List<Investment>> getInvestorPortfolio(@PathVariable Long investorId) {
+    public ResponseEntity<List<Investment>> getInvestorPortfolio(
+            @PathVariable Long investorId,
+            @AuthenticationPrincipal Jwt jwt) {
+        // Nesne-seviyesi yetkilendirme: ADMIN her portföyü görebilir; ADVISOR yalnızca
+        // kendisine atanmış yatırımcıları. Aksi halde danışmanlar arası BOLA oluşur.
+        User actor = userRepository.findByKeycloakId(jwt.getSubject())
+                .orElseThrow(() -> new AccessDeniedException("Yetkili kullanıcı bulunamadı."));
+        if (actor.getRole() != Role.ADMIN) {
+            boolean manages = investmentRepository.findByInvestorId(investorId).stream()
+                    .anyMatch(inv -> inv.getAdvisor() != null
+                            && inv.getAdvisor().getId().equals(actor.getId()));
+            if (!manages) {
+                throw new AccessDeniedException("Bu yatırımcının portföyüne erişim yetkiniz yok.");
+            }
+        }
         return ResponseEntity.ok(investmentService.getMyPortfolio(investorId));
     }
 

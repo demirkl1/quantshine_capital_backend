@@ -36,6 +36,11 @@ public class TradeService {
     public void executeTrade(String advisorKeycloakId, String investorTc, String fundCode,
                              BigDecimal amount, TransactionType type) {
 
+        // ── Girdi doğrulama: negatif/sıfır tutar reddedilir ──────────────
+        if (amount == null || amount.signum() <= 0) {
+            throw new IllegalArgumentException("İşlem tutarı pozitif olmalıdır.");
+        }
+
         Fund fund = fundRepository.findByFundCode(fundCode.toUpperCase())
                 .orElseThrow(() -> new RuntimeException("Fon bulunamadı: " + fundCode));
 
