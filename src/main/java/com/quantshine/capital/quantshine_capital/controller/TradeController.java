@@ -4,6 +4,7 @@ import com.quantshine.capital.quantshine_capital.service.StockService;
 import com.quantshine.capital.quantshine_capital.service.TradeService;
 import com.quantshine.capital.quantshine_capital.entity.TransactionType;
 import com.quantshine.capital.quantshine_capital.entity.User;
+import com.quantshine.capital.quantshine_capital.entity.Role;
 import com.quantshine.capital.quantshine_capital.entity.Investment;
 import com.quantshine.capital.quantshine_capital.repository.UserRepository;
 import com.quantshine.capital.quantshine_capital.repository.InvestmentRepository;
@@ -14,6 +15,7 @@ import com.quantshine.capital.quantshine_capital.dto.StockTradeRequest;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -32,6 +34,21 @@ public class TradeController {
     private final UserRepository userRepository;
     private final InvestmentRepository investmentRepository;
     private final StockService stockService;
+
+    /**
+     * Nesne-seviyesi yetkilendirme: ADMIN her fonda işlem yapabilir; ADVISOR yalnızca
+     * kendi yönettiği fon (managedFundCode) üzerinde. Aksi halde 403.
+     * Rol bazlı @PreAuthorize tek başına yetmez — danışmanlar arası BOLA'yı önler.
+     */
+    private void assertCanTradeFund(Jwt jwt, String fundCode) {
+        User actor = userRepository.findByKeycloakId(jwt.getSubject())
+                .orElseThrow(() -> new AccessDeniedException("Yetkili kullanıcı bulunamadı."));
+        if (actor.getRole() == Role.ADMIN) return;
+        String managed = actor.getManagedFundCode();
+        if (managed == null || fundCode == null || !managed.equalsIgnoreCase(fundCode)) {
+            throw new AccessDeniedException("Bu fon üzerinde işlem yetkiniz yok.");
+        }
+    }
 
     @GetMapping("/all-history")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADVISOR')")
@@ -57,10 +74,12 @@ public class TradeController {
     public ResponseEntity<String> executeTrade(
             @RequestBody Map<String, Object> payload,
             @AuthenticationPrincipal Jwt jwt) {
+        // Yetkilendirme try bloğundan ÖNCE — AccessDeniedException 403 olarak yükselsin
+        String fundCode = (String) payload.get("fundCode");
+        assertCanTradeFund(jwt, fundCode);
         try {
             String advisorKeycloakId = jwt.getSubject();
             String investorTc = (String) payload.get("investorTc");
-            String fundCode = (String) payload.get("fundCode");
             BigDecimal amount = new BigDecimal(payload.get("amount").toString());
             TransactionType type = TransactionType.valueOf(payload.get("type").toString().toUpperCase());
 
@@ -79,13 +98,16 @@ public class TradeController {
 
     @PostMapping("/stock-execute")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADVISOR')")
-    public ResponseEntity<?> executeStockTrade(@RequestBody StockTradeRequest request) {
+    public ResponseEntity<?> executeStockTrade(@RequestBody StockTradeRequest request,
+                                               @AuthenticationPrincipal Jwt jwt) {
+        // Yetkilendirme try bloğundan ÖNCE — AccessDeniedException 403 olarak yükselsin
+        assertCanTradeFund(jwt, request.getFundCode());
         try {
+            // Fiyat istemciden alınmaz; StockService piyasa fiyatını kullanır.
             String result = stockService.executeStockTrade(
                     request.getFundCode(),
                     request.getStockCode(),
                     request.getLot(),
-                    request.getPrice(),
                     request.getType()
             );
             return ResponseEntity.ok(result);
