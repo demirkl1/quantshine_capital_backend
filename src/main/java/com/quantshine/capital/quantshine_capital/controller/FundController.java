@@ -22,11 +22,15 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/funds")
 @RequiredArgsConstructor
 public class FundController {
+
+    private static final Logger log = LoggerFactory.getLogger(FundController.class);
 
     private final FundRepository             fundRepository;
     private final UserRepository             userRepository;
@@ -274,7 +278,8 @@ public class FundController {
             fundService.deleteFund(fundCode.toUpperCase());
             return ResponseEntity.ok("Fon başarıyla silindi.");
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            log.warn("Fon silme başarısız ({}): {}", fundCode, e.getMessage(), e);
+            return ResponseEntity.badRequest().body("Fon silinemedi.");
         }
     }
 
@@ -292,7 +297,8 @@ public class FundController {
             fundService.updateFundPriceBasedOnPortfolio(fundCode);
             return ResponseEntity.ok("Fon fiyatı güncellendi.");
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Hata: " + e.getMessage());
+            log.warn("Fon fiyatı güncelleme başarısız ({}): {}", fundCode, e.getMessage(), e);
+            return ResponseEntity.badRequest().body("Fon fiyatı güncellenemedi.");
         }
     }
 }

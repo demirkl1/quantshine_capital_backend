@@ -64,7 +64,8 @@ public class StockController {
             if (saved == null) return ResponseEntity.notFound().build();
             return ResponseEntity.ok(saved);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Hata: " + e.getMessage());
+            log.warn("pair-id atama başarısız ({}): {}", code, e.getMessage(), e);
+            return ResponseEntity.badRequest().body("İşlem gerçekleştirilemedi.");
         }
     }
 
@@ -104,8 +105,8 @@ public class StockController {
             return ResponseEntity.ok(updated);
 
         } catch (Exception e) {
-            log.error("Manuel güncelleme hatası: {}", e.getMessage());
-            return ResponseEntity.badRequest().body("Hata: " + e.getMessage());
+            log.error("Manuel güncelleme hatası: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body("Fiyat güncellenemedi.");
         }
     }
 
@@ -141,8 +142,8 @@ public class StockController {
             return ResponseEntity.ok(updated);
 
         } catch (Exception e) {
-            log.error("Güncelleme hatası: {}", e.getMessage());
-            return ResponseEntity.badRequest().body("Hata: " + e.getMessage());
+            log.error("Güncelleme hatası: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body("Fiyat güncellenemedi.");
         }
     }
 }

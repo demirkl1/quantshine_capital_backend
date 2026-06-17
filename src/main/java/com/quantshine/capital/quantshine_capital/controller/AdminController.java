@@ -21,12 +21,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/admin")
 @PreAuthorize("hasRole('ADMIN')")
 @RequiredArgsConstructor
 public class AdminController {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminController.class);
 
     private final UserService userService;
     private final UserRepository userRepository;
@@ -123,7 +127,9 @@ public class AdminController {
                 return ResponseEntity.ok("Kayıt reddedildi.");
             }
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Hata: " + e.getMessage());
+            // Ham hata detayı yalnızca logda; istemciye generic mesaj (bilgi sızıntısı önlenir).
+            log.warn("Kullanıcı onay/ret işlemi başarısız (id={}): {}", id, e.getMessage(), e);
+            return ResponseEntity.badRequest().body("İşlem gerçekleştirilemedi.");
         }
     }
 

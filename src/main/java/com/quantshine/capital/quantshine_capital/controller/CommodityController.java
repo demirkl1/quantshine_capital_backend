@@ -11,11 +11,15 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/commodities")
 @RequiredArgsConstructor
 public class CommodityController {
+
+    private static final Logger log = LoggerFactory.getLogger(CommodityController.class);
 
     private final CommodityService commodityService;
 
@@ -57,6 +61,8 @@ public class CommodityController {
             String result = commodityService.executeCommodityTrade(fundCode, symbol, lot, priceUsd, rate, type);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
+            // Trade hataları kullanıcıya yararlı (ör. yetersiz bakiye) → mesaj korunur; tam iz logda.
+            log.warn("Emtia işlem hatası: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
