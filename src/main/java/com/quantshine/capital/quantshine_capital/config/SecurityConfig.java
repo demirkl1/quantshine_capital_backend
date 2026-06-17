@@ -57,6 +57,9 @@ public class SecurityConfig {
                         // Haber akışı (herkese açık)
                         .requestMatchers("/api/news/**").permitAll()
 
+                        // İletişim formu (herkese açık; controller'da IP throttle var)
+                        .requestMatchers(HttpMethod.POST, "/api/contact").permitAll()
+
                         // ── Fon endpoint'leri ──────────────────────────────
                         // Genel liste ve detay: giriş yapmadan erişilebilir
                         //   GET /api/funds          → tüm fonlar
