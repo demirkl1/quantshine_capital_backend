@@ -1,10 +1,14 @@
 package com.quantshine.capital.quantshine_capital.controller;
 
 import com.quantshine.capital.quantshine_capital.config.AuthCookieService;
+import com.quantshine.capital.quantshine_capital.dto.ForgotPasswordRequest;
 import com.quantshine.capital.quantshine_capital.dto.LoginRequest;
+import com.quantshine.capital.quantshine_capital.dto.ResetPasswordRequest;
 import com.quantshine.capital.quantshine_capital.dto.UserDTO;
+import com.quantshine.capital.quantshine_capital.dto.VerifyCodeRequest;
 import com.quantshine.capital.quantshine_capital.entity.User;
 import com.quantshine.capital.quantshine_capital.service.LoginRateLimiter;
+import com.quantshine.capital.quantshine_capital.service.PasswordResetService;
 import com.quantshine.capital.quantshine_capital.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -39,6 +43,7 @@ public class AuthController {
     private final LoginRateLimiter loginRateLimiter;
     private final AuthCookieService authCookies;
     private final JwtDecoder jwtDecoder;
+    private final PasswordResetService passwordResetService;
 
     private final RestClient restClient = RestClient.create();
 
@@ -62,6 +67,39 @@ public class AuthController {
             log.warn("Kayıt başarısız: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body("Kayıt işlemi tamamlanamadı. Bilgilerinizi kontrol edip tekrar deneyin.");
+        }
+    }
+
+    // ── Şifremi unuttum akışı ───────────────────────────────────────────────
+    // Adım 1: e-posta → doğrulama kodu gönder. Enumeration'a karşı her zaman 200.
+    @PostMapping("/password/forgot")
+    public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest req) {
+        passwordResetService.requestReset(req.getEmail());
+        return ResponseEntity.ok("E-posta adresi kayıtlıysa doğrulama kodu gönderildi.");
+    }
+
+    // Adım 2: kodu doğrula (tüketmez) — frontend şifre alanlarını göstermeden önce.
+    @PostMapping("/password/verify")
+    public ResponseEntity<?> verifyResetCode(@Valid @RequestBody VerifyCodeRequest req) {
+        if (passwordResetService.verify(req.getEmail(), req.getCode())) {
+            return ResponseEntity.ok("Kod doğrulandı.");
+        }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body("Doğrulama kodu geçersiz veya süresi dolmuş.");
+    }
+
+    // Adım 3: kod + yeni şifre → Keycloak şifresini sıfırla.
+    @PostMapping("/password/reset")
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
+        try {
+            passwordResetService.reset(req.getEmail(), req.getCode(), req.getNewPassword());
+            return ResponseEntity.ok("Şifreniz başarıyla güncellendi. Yeni şifrenizle giriş yapabilirsiniz.");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            log.warn("Şifre sıfırlama başarısız: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("Şifre güncellenemedi. Kodun geçerli ve yeni şifrenin kurallara uygun olduğundan emin olun.");
         }
     }
 
