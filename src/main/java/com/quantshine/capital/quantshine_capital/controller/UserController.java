@@ -19,12 +19,16 @@ import com.quantshine.capital.quantshine_capital.dto.AdvisorProfileDTO;
 import java.util.stream.Collectors;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
 public class UserController {
+
+    private static final Logger log = LoggerFactory.getLogger(UserController.class);
 
     private final UserService userService;
     private final TradeService tradeService;
@@ -53,7 +57,8 @@ public class UserController {
             userService.approveUser(id);
             return ResponseEntity.ok("Kullanıcı onaylandı ve Keycloak hesabı oluşturuldu.");
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Hata: " + e.getMessage());
+            log.warn("Kullanıcı onaylama başarısız (id={}): {}", id, e.getMessage(), e);
+            return ResponseEntity.badRequest().body("Kullanıcı onaylanamadı.");
         }
     }
 
@@ -92,7 +97,8 @@ public class UserController {
             investmentService.assignInvestment(investorTc, advisorTc, fundCode.toUpperCase(), isTransfer);
             return ResponseEntity.ok(isTransfer ? "Transfer başarıyla tamamlandı." : "Yeni yatırım kaydı oluşturuldu.");
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Atama hatası: " + e.getMessage());
+            log.warn("Yatırım atama başarısız: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body("Atama gerçekleştirilemedi.");
         }
     }
 
@@ -154,7 +160,8 @@ public class UserController {
                     );
             return ResponseEntity.ok("Yatırımcı " + fundCode.toUpperCase() + " fonundan çıkarıldı.");
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Hata: " + e.getMessage());
+            log.warn("Yatırımcı fondan çıkarma başarısız: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body("İşlem gerçekleştirilemedi.");
         }
     }
 
@@ -203,7 +210,8 @@ public class UserController {
             userService.deleteInvestorByTcNo(tcNo);
             return ResponseEntity.ok("Yatırımcı başarıyla silindi.");
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Silme hatası: " + e.getMessage());
+            log.warn("Yatırımcı silme başarısız: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body("Silme işlemi gerçekleştirilemedi.");
         }
     }
 

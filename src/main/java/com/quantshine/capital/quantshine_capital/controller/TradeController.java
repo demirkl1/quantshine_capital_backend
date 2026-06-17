@@ -28,11 +28,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/trade")
 @RequiredArgsConstructor
 public class TradeController {
+
+    private static final Logger log = LoggerFactory.getLogger(TradeController.class);
 
     private final TradeService tradeService;
     private final UserRepository userRepository;
@@ -114,6 +118,8 @@ public class TradeController {
             tradeService.executeTrade(advisorKeycloakId, investorTc, fundCode, amount, type);
             return ResponseEntity.ok("İşlem başarıyla gerçekleşti.");
         } catch (Exception e) {
+            // Trade hataları kullanıcıya yararlı (ör. yetersiz bakiye) → mesaj korunur; tam iz logda.
+            log.warn("İşlem hatası: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body("İşlem hatası: " + e.getMessage());
         }
     }
@@ -165,6 +171,8 @@ public class TradeController {
             );
             return ResponseEntity.ok(result);
         } catch (Exception e) {
+            // Trade hataları kullanıcıya yararlı (ör. yetersiz bakiye) → mesaj korunur; tam iz logda.
+            log.warn("Hisse işlem hatası: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body("İşlem Hatası: " + e.getMessage());
         }
     }
