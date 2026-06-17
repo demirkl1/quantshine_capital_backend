@@ -82,6 +82,32 @@ public class UserService {
     }
 
     /**
+     * Onaylı bir kullanıcının (keycloakId'si olan) Keycloak şifresini sıfırlar.
+     * Şifre sıfırlama (forgot password) akışında, doğrulama kodu doğrulandıktan
+     * sonra çağrılır. DB transaction tutmaz (yalnızca Keycloak REST).
+     */
+    public void resetPasswordByEmail(String email, String newPassword) {
+        User user = userRepository.findByEmail(email.toLowerCase().trim())
+                .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı"));
+        if (user.getKeycloakId() == null) {
+            throw new RuntimeException("Kullanıcı henüz aktif değil");
+        }
+        CredentialRepresentation cred = new CredentialRepresentation();
+        cred.setTemporary(false);
+        cred.setType(CredentialRepresentation.PASSWORD);
+        cred.setValue(newPassword);
+        keycloak.realm(realmName).users().get(user.getKeycloakId()).resetPassword(cred);
+        log.info("Şifre sıfırlandı (Keycloak): {}", email);
+    }
+
+    /** Şifre sıfırlama kodu gönderilebilir mi: kullanıcı var ve aktif (keycloakId dolu) mu. */
+    public boolean canResetPassword(String email) {
+        return userRepository.findByEmail(email.toLowerCase().trim())
+                .map(u -> u.getKeycloakId() != null)
+                .orElse(false);
+    }
+
+    /**
      * Keycloak'ta kullanıcı oluşturur, şifresini tanımlar, rolünü atar.
      * Herhangi bir DB transaction'ı tutmadan çalışır.
      *
