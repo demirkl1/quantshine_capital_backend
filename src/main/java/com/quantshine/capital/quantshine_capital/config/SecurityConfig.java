@@ -23,10 +23,15 @@ import java.util.Arrays;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private final CookieBearerTokenResolver cookieBearerTokenResolver;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .cors(Customizer.withDefaults())
+                // CSRF disable: API stateless; auth cookie'leri SameSite (access=Lax,
+                // refresh=Strict) + zorunlu X-Requested-With header'ı (cross-origin'de
+                // CORS preflight gerektirir) CSRF yüzeyini pratikte kapatır.
                 .csrf(csrf -> csrf.disable())
 
                 // ── Güvenlik Header'ları ───────────────────────────────────
@@ -68,6 +73,9 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        // Access token önce qs_access cookie'sinden, yoksa Authorization
+                        // header'ından okunur (ROPC→cookie geçiş uyumluluğu).
+                        .bearerTokenResolver(cookieBearerTokenResolver)
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
                 );
 
@@ -84,7 +92,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", "https://quant-shine.com", "https://www.quant-shine.com"));
+        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", "http://localhost:3001", "https://quant-shine.com", "https://www.quant-shine.com"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept", "X-Requested-With"));
         configuration.setAllowCredentials(true);

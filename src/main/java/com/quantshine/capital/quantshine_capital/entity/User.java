@@ -1,5 +1,6 @@
 package com.quantshine.capital.quantshine_capital.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -29,6 +30,8 @@ public class User {
 
     private String phoneNumber;
 
+    // Yanıt gövdesinde asla serialize edilmez (geçici parola sızıntısını önler).
+    @JsonIgnore
     private String password;
 
     @Column(nullable = false)

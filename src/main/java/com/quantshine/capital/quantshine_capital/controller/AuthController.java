@@ -1,7 +1,9 @@
 package com.quantshine.capital.quantshine_capital.controller;
 
+import com.quantshine.capital.quantshine_capital.config.AuthCookieService;
 import com.quantshine.capital.quantshine_capital.dto.LoginRequest;
 import com.quantshine.capital.quantshine_capital.dto.UserDTO;
+import com.quantshine.capital.quantshine_capital.entity.User;
 import com.quantshine.capital.quantshine_capital.service.LoginRateLimiter;
 import com.quantshine.capital.quantshine_capital.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,9 +16,17 @@ import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.representations.AccessTokenResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestClient;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -27,6 +37,10 @@ public class AuthController {
 
     private final UserService userService;
     private final LoginRateLimiter loginRateLimiter;
+    private final AuthCookieService authCookies;
+    private final JwtDecoder jwtDecoder;
+
+    private final RestClient restClient = RestClient.create();
 
     @Value("${keycloak.realm}")
     private String realm;
@@ -51,6 +65,11 @@ public class AuthController {
         }
     }
 
+    /**
+     * ROPC ile giriş. Token'lar artık yanıt gövdesinde DÖNMEZ; HttpOnly cookie'lere
+     * yazılır (XSS sızıntısını önler). Gövdede yalnızca yönlendirme için kullanıcı
+     * profili (rol vb.) döner — hassas değildir.
+     */
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest, HttpServletRequest request) {
         String clientIp = getClientIp(request);
@@ -72,12 +91,100 @@ public class AuthController {
 
             AccessTokenResponse tokenResponse = userKeycloak.tokenManager().getAccessToken();
             loginRateLimiter.onSuccess(clientIp);
-            return ResponseEntity.ok(tokenResponse);
+
+            // Access token'ı doğrula + claim'lerden kullanıcıyı DB ile senkronla.
+            Jwt jwt = jwtDecoder.decode(tokenResponse.getToken());
+            User user = userService.ensureSyncedFromJwt(jwt);
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.SET_COOKIE,
+                            authCookies.accessCookie(tokenResponse.getToken(), tokenResponse.getExpiresIn()).toString())
+                    .header(HttpHeaders.SET_COOKIE,
+                            authCookies.refreshCookie(tokenResponse.getRefreshToken(), tokenResponse.getRefreshExpiresIn()).toString())
+                    .body(user);
         } catch (Exception e) {
             loginRateLimiter.recordFailure(clientIp);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body("Giriş başarısız: Bilgilerinizi kontrol edin.");
         }
+    }
+
+    /**
+     * Refresh cookie'sini kullanarak access token'ı şeffaf yeniler ve cookie'leri
+     * günceller. Frontend bunu 401 sonrası bir kez çağırır.
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refresh(HttpServletRequest request) {
+        String refreshToken = AuthCookieService.readCookie(request, AuthCookieService.REFRESH_COOKIE);
+        if (refreshToken == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        try {
+            MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+            form.add(OAuth2Constants.GRANT_TYPE, OAuth2Constants.REFRESH_TOKEN);
+            form.add(OAuth2Constants.CLIENT_ID, clientId);
+            form.add(OAuth2Constants.REFRESH_TOKEN, refreshToken);
+
+            AccessTokenResponse refreshed = restClient.post()
+                    .uri(serverUrl + "/realms/" + realm + "/protocol/openid-connect/token")
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(form)
+                    .retrieve()
+                    .body(AccessTokenResponse.class);
+
+            if (refreshed == null || refreshed.getToken() == null) {
+                return clearCookiesUnauthorized();
+            }
+
+            ResponseEntity.BodyBuilder ok = ResponseEntity.status(HttpStatus.NO_CONTENT);
+            ok.header(HttpHeaders.SET_COOKIE,
+                    authCookies.accessCookie(refreshed.getToken(), refreshed.getExpiresIn()).toString());
+            if (refreshed.getRefreshToken() != null) {
+                ok.header(HttpHeaders.SET_COOKIE,
+                        authCookies.refreshCookie(refreshed.getRefreshToken(), refreshed.getRefreshExpiresIn()).toString());
+            }
+            return ok.build();
+        } catch (Exception e) {
+            log.debug("Token yenileme başarısız: {}", e.getMessage());
+            return clearCookiesUnauthorized();
+        }
+    }
+
+    /**
+     * Çıkış: cookie'leri temizler ve mümkünse refresh token'ı Keycloak'ta iptal eder.
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
+        String refreshToken = AuthCookieService.readCookie(request, AuthCookieService.REFRESH_COOKIE);
+        if (refreshToken != null) {
+            try {
+                MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+                form.add(OAuth2Constants.CLIENT_ID, clientId);
+                form.add(OAuth2Constants.REFRESH_TOKEN, refreshToken);
+                restClient.post()
+                        .uri(serverUrl + "/realms/" + realm + "/protocol/openid-connect/logout")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .body(form)
+                        .retrieve()
+                        .toBodilessEntity();
+            } catch (Exception e) {
+                log.debug("Keycloak logout (revoke) başarısız, cookie'ler yine de temizleniyor: {}", e.getMessage());
+            }
+        }
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, authCookies.clearAccessCookie().toString())
+                .header(HttpHeaders.SET_COOKIE, authCookies.clearRefreshCookie().toString())
+                .build();
+    }
+
+    private ResponseEntity<Void> clearCookiesUnauthorized() {
+        ResponseCookie clearAccess = authCookies.clearAccessCookie();
+        ResponseCookie clearRefresh = authCookies.clearRefreshCookie();
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .header(HttpHeaders.SET_COOKIE, clearAccess.toString())
+                .header(HttpHeaders.SET_COOKIE, clearRefresh.toString())
+                .build();
     }
 
     private String getClientIp(HttpServletRequest request) {
