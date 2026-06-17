@@ -35,6 +35,7 @@ public class UserController {
     private final InvestmentService investmentService;
     private final UserRepository userRepository;
     private final InvestmentRepository investmentRepository;
+    private final com.quantshine.capital.quantshine_capital.service.AuditService auditService;
 
     // --- PROFIL VE ONAY ISLEMLERI ---
 
@@ -55,6 +56,7 @@ public class UserController {
     public ResponseEntity<String> approveUser(@PathVariable Long id) {
         try {
             userService.approveUser(id);
+            auditService.log("USER_APPROVED", "id=" + id);
             return ResponseEntity.ok("Kullanıcı onaylandı ve Keycloak hesabı oluşturuldu.");
         } catch (Exception e) {
             log.warn("Kullanıcı onaylama başarısız (id={}): {}", id, e.getMessage(), e);
@@ -69,6 +71,7 @@ public class UserController {
             return ResponseEntity.notFound().build();
         }
         userRepository.deleteById(id);
+        auditService.log("USER_REJECTED", "id=" + id);
         return ResponseEntity.ok("Kayıt reddedildi ve silindi.");
     }
 
@@ -95,6 +98,8 @@ public class UserController {
             @RequestParam(defaultValue = "false") boolean isTransfer) {
         try {
             investmentService.assignInvestment(investorTc, advisorTc, fundCode.toUpperCase(), isTransfer);
+            auditService.log(isTransfer ? "INVESTMENT_TRANSFERRED" : "INVESTMENT_ASSIGNED",
+                    "investorTc=" + investorTc + " advisorTc=" + advisorTc + " fund=" + fundCode.toUpperCase());
             return ResponseEntity.ok(isTransfer ? "Transfer başarıyla tamamlandı." : "Yeni yatırım kaydı oluşturuldu.");
         } catch (Exception e) {
             log.warn("Yatırım atama başarısız: {}", e.getMessage(), e);
@@ -140,6 +145,7 @@ public class UserController {
                     }
                     user.setManagedFundCode(fundCode.toUpperCase());
                     userRepository.save(user);
+                    auditService.log("ADVISOR_TRANSFERRED", "userId=" + userId + " fund=" + fundCode.toUpperCase());
                     return ResponseEntity.ok("Danışman " + fundCode + " fonuna transfer edildi.");
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -208,6 +214,7 @@ public class UserController {
     public ResponseEntity<?> deleteInvestor(@PathVariable String tcNo) {
         try {
             userService.deleteInvestorByTcNo(tcNo);
+            auditService.log("USER_DELETED", "tcNo=" + tcNo);
             return ResponseEntity.ok("Yatırımcı başarıyla silindi.");
         } catch (Exception e) {
             log.warn("Yatırımcı silme başarısız: {}", e.getMessage(), e);

@@ -7,6 +7,7 @@ import com.quantshine.capital.quantshine_capital.dto.ResetPasswordRequest;
 import com.quantshine.capital.quantshine_capital.dto.UserDTO;
 import com.quantshine.capital.quantshine_capital.dto.VerifyCodeRequest;
 import com.quantshine.capital.quantshine_capital.entity.User;
+import com.quantshine.capital.quantshine_capital.service.AuditService;
 import com.quantshine.capital.quantshine_capital.service.LoginRateLimiter;
 import com.quantshine.capital.quantshine_capital.service.PasswordResetService;
 import com.quantshine.capital.quantshine_capital.service.UserService;
@@ -44,6 +45,7 @@ public class AuthController {
     private final AuthCookieService authCookies;
     private final JwtDecoder jwtDecoder;
     private final PasswordResetService passwordResetService;
+    private final AuditService auditService;
 
     private final RestClient restClient = RestClient.create();
 
@@ -129,6 +131,7 @@ public class AuthController {
 
             AccessTokenResponse tokenResponse = userKeycloak.tokenManager().getAccessToken();
             loginRateLimiter.onSuccess(clientIp);
+            auditService.log("LOGIN_SUCCESS", "email=" + AuditService.maskEmail(loginRequest.getEmail()) + " ip=" + clientIp);
 
             // Access token'ı doğrula + claim'lerden kullanıcıyı DB ile senkronla.
             Jwt jwt = jwtDecoder.decode(tokenResponse.getToken());
@@ -142,6 +145,7 @@ public class AuthController {
                     .body(user);
         } catch (Exception e) {
             loginRateLimiter.recordFailure(clientIp);
+            auditService.log("LOGIN_FAILURE", "email=" + AuditService.maskEmail(loginRequest.getEmail()) + " ip=" + clientIp);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body("Giriş başarısız: Bilgilerinizi kontrol edin.");
         }

@@ -36,6 +36,7 @@ public class AdminController {
     private final UserRepository userRepository;
     private final InvestmentRepository investmentRepository;
     private final FundRepository fundRepository;
+    private final com.quantshine.capital.quantshine_capital.service.AuditService auditService;
 
     /**
      * Admin'in yönettiği fonun güncel fiyatını döner.
@@ -120,10 +121,12 @@ public class AdminController {
         try {
             if ("ACCEPTED".equals(status)) {
                 userService.approveUser(id);
+                auditService.log("USER_APPROVED", "id=" + id);
                 return ResponseEntity.ok("Kullanıcı onaylandı.");
             } else {
                 if (!userRepository.existsById(id)) return ResponseEntity.notFound().build();
                 userRepository.deleteById(id);
+                auditService.log("USER_REJECTED", "id=" + id);
                 return ResponseEntity.ok("Kayıt reddedildi.");
             }
         } catch (Exception e) {
