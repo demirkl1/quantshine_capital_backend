@@ -35,6 +35,7 @@ public class UserService {
     private final Keycloak keycloak;
     private final EncryptionService encryptionService;
     private final TransactionTemplate transactionTemplate;
+    private final NotificationService notificationService;
 
     @Value("${keycloak.realm}")
     private String realmName;
@@ -79,6 +80,9 @@ public class UserService {
 
         log.info("{} için Keycloak hesabı ve {} rolü başarıyla oluşturuldu.",
                 user.getEmail(), user.getRole().name());
+
+        // Best-effort: kullanıcıya "hesabın aktif" bildirimi
+        notificationService.notifyUserApproved(user.getEmail(), user.getFirstName());
     }
 
     /**
@@ -279,6 +283,10 @@ public class UserService {
         user.setApproved(false);
 
         userRepository.save(user);
+        // Best-effort: admin'e yeni kayıt bildirimi (akışı bozmaz)
+        notificationService.notifyAdminNewRegistration(
+                userDto.getFirstName() + " " + userDto.getLastName(),
+                userDto.getEmail(), userDto.getRole());
     }
     public List<User> getApprovedInvestors() {
         return userRepository.findByRoleAndIsApprovedTrue(Role.INVESTOR);

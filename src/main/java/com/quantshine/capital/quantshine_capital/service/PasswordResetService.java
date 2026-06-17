@@ -28,6 +28,7 @@ public class PasswordResetService {
 
     private final JavaMailSender mailSender;
     private final UserService userService;
+    private final AuditService auditService;
 
     @Value("${contact.from}")
     private String from;
@@ -70,6 +71,7 @@ public class PasswordResetService {
         store.put(key, new Entry(code, now + TTL_MS, now));
         try {
             sendCodeEmail(key, code);
+            auditService.log("PASSWORD_RESET_REQUESTED", "email=" + AuditService.maskEmail(key));
         } catch (Exception e) {
             log.error("Şifre sıfırlama kodu gönderilemedi ({}): {}", key, e.getMessage());
             store.remove(key); // gönderilemediyse kodu tutma
@@ -95,7 +97,8 @@ public class PasswordResetService {
         }
         userService.resetPasswordByEmail(key, newPassword);
         store.remove(key); // tek kullanımlık
-        log.info("Şifre sıfırlama tamamlandı: {}", key);
+        auditService.log("PASSWORD_RESET_COMPLETED", "email=" + AuditService.maskEmail(key));
+        log.info("Şifre sıfırlama tamamlandı: {}", AuditService.maskEmail(key));
     }
 
     private void sendCodeEmail(String email, String code) {
