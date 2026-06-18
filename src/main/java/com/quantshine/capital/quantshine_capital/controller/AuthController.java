@@ -10,6 +10,7 @@ import com.quantshine.capital.quantshine_capital.entity.User;
 import com.quantshine.capital.quantshine_capital.service.AuditService;
 import com.quantshine.capital.quantshine_capital.service.LoginRateLimiter;
 import com.quantshine.capital.quantshine_capital.service.PasswordResetService;
+import com.quantshine.capital.quantshine_capital.service.RegistrationVerificationService;
 import com.quantshine.capital.quantshine_capital.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -45,6 +46,7 @@ public class AuthController {
     private final AuthCookieService authCookies;
     private final JwtDecoder jwtDecoder;
     private final PasswordResetService passwordResetService;
+    private final RegistrationVerificationService registrationVerification;
     private final AuditService auditService;
 
     private final RestClient restClient = RestClient.create();
@@ -58,10 +60,23 @@ public class AuthController {
     @Value("${keycloak.client-id}")
     private String clientId;
 
+    // Kayıt e-posta doğrulaması — adım 1: e-postaya kod gönder (zaten kayıtlıysa sessiz).
+    @PostMapping("/register/send-code")
+    public ResponseEntity<?> sendRegistrationCode(@Valid @RequestBody ForgotPasswordRequest req) {
+        registrationVerification.sendCode(req.getEmail());
+        return ResponseEntity.ok("Doğrulama kodu e-posta adresinize gönderildi (adres uygunsa).");
+    }
+
     @PostMapping("/pending/register")
     public ResponseEntity<?> registerPendingUser(@Valid @RequestBody UserDTO userDto) {
+        // Kayıt e-posta doğrulaması: kod geçerli değilse kaydı oluşturma.
+        if (!registrationVerification.verify(userDto.getEmail(), userDto.getVerificationCode())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("E-posta doğrulama kodu geçersiz veya süresi dolmuş. Lütfen kodu kontrol edin.");
+        }
         try {
             userService.registerPendingUser(userDto);
+            registrationVerification.consume(userDto.getEmail());
             return ResponseEntity.status(HttpStatus.CREATED).body("Kayıt isteği alındı, admin onayı bekleniyor.");
         } catch (Exception e) {
             // Ayrıntıyı yalnızca logla; istemciye generic mesaj — kullanıcı/e-posta
