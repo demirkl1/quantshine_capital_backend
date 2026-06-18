@@ -60,6 +60,9 @@ public class SecurityConfig {
                         // İletişim formu (herkese açık; controller'da IP throttle var)
                         .requestMatchers(HttpMethod.POST, "/api/contact").permitAll()
 
+                        // Actuator sağlık ucu (healthcheck/probe için açık; detay gizli)
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+
                         // ── Fon endpoint'leri ──────────────────────────────
                         // Genel liste ve detay: giriş yapmadan erişilebilir
                         //   GET /api/funds          → tüm fonlar

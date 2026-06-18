@@ -33,4 +33,9 @@ public class UserDTO {
     @NotBlank(message = "Rol boş olamaz")
     @Pattern(regexp = "INVESTOR|ADVISOR", message = "Rol INVESTOR veya ADVISOR olmalıdır")
     private String role;
+
+    // E-posta doğrulama kodu (6 hane). Varlık/geçerlilik kontrolü controller'da
+    // RegistrationVerificationService ile yapılır (DTO seviyesinde lenient).
+    @Pattern(regexp = "\\d{6}", message = "Doğrulama kodu 6 haneli olmalıdır")
+    private String verificationCode;
 }
